@@ -1,0 +1,13 @@
+RewriteEngine On
+RewriteBase /
+
+RewriteCond %{THE_REQUEST} /public_web/([^\s?]*) [NC]
+RewriteRule ^ %1 [L,NE,R=302]
+RewriteRule ^(.*)$ public_web/index.php?$1 [L,QSA]
+RewriteRule ^(.*)$ public_web/index.php?$1 [L,QSA]
+
+#DirectoryIndex public_web/index.php public_web/index.html
+
+RewriteEngine on
+RewriteCond %{REQUEST_URI} !^public_web
+RewriteRule ^(.*)$ public_web/$1 [L]
