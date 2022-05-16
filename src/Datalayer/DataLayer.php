@@ -325,4 +325,29 @@ abstract class DataLayer
         $camelCase[0] = strtolower($camelCase[0]);
         return $camelCase;
     }
+    
+    /**
+     * frontward
+     *
+     * @return void
+     */
+    public function frontward()
+    {
+        $this->statement = $sql = "SELECT {$this->primary} FROM {$this->entity} WHERE {$this->primary} = (SELECT MIN({$this->primary}) FROM {$this->entity} WHERE {$this->primary} > :co)";
+        parse_str("co={$this->codigo}", $this->params);
+        return ($this)->fetch();
+    }
+    
+    /**
+     * backward
+     *
+     * @return void
+     */
+    public function backward()
+    {
+        $this->statement = $sql = "SELECT {$this->primary} FROM {$this->entity} WHERE {$this->primary} = (SELECT MAX({$this->primary}) FROM {$this->entity} WHERE {$this->primary} < :co)";
+
+        parse_str("co={$this->codigo}", $this->params);
+        return ($this)->fetch();
+    }
 }
