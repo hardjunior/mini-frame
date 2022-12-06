@@ -183,6 +183,16 @@ abstract class DataLayer
     }
 
     /**
+     * @param string $columnHaving
+     * @return DataLayer|null
+     */
+    public function having(string $columnHaving): ?DataLayer
+    {
+        $this->having = " HAVING {$columnHaving}";
+        return $this;
+    }
+
+    /**
      * @param int $limit
      * @return DataLayer|null
      */
@@ -325,7 +335,7 @@ abstract class DataLayer
         $camelCase[0] = strtolower($camelCase[0]);
         return $camelCase;
     }
-    
+
     /**
      * frontward
      *
@@ -337,7 +347,7 @@ abstract class DataLayer
         parse_str("co={$this->codigo}", $this->params);
         return ($this)->fetch();
     }
-    
+
     /**
      * backward
      *
