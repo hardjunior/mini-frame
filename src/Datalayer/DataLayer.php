@@ -275,7 +275,9 @@ abstract class DataLayer
                 return false;
             }
 
-            $this->dados = $this->findById($codigo)->dados();
+            if ($result = $this->findById($codigo)) {
+                $this->dados = $this->findById($codigo)->dados();
+            }
             return true;
         } catch (Exception $exception) {
             $this->fail = $exception;
