@@ -2,42 +2,37 @@
   "name": "hardjunior/mini-frame",
   "license": "MIT",
   "description": "PHP image cropper and cache thumb manager, the data layer is a persistent abstraction component of your database that PDO, optimizer makes it easy to bookmark your site tags, open graph and twitter card, um teste de composer de rota mvc, fast and extremely uncomplicated. Create and manage your routes in minutes e upload manager for images, files and media",
-  "authors": [
-    {
-      "name": "Ivamar Júnior",
-      "email": "hardjunior1@gmail.com",
-      "role": "Developer",
-      "homepage": "http://hardjunior.ddns.net"
-    }
-  ],
+  "authors": [{
+    "name": "Ivamar Júnior",
+    "email": "hardjunior1@gmail.com",
+    "role": "Developer",
+    "homepage": "http://hardjunior.ddns.net"
+  }],
   "minimum-stability": "stable",
   "require": {
     "php": ">=7.2",
-    "ext-json": "*",
-    "ext-openssl": "*",
-    "ext-gd": "*",
-    "ext-mbstring": "*",
     "ext-fileinfo": "*",
+    "ext-gd": "*",
     "ext-imagick": "*",
-    "rosell-dk/webp-convert": "^2.6",
-    "phpmailer/phpmailer":"^6.5",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "ext-openssl": "*",
     "filips123/monolog-phpmailer": "^1.0",
-    "matthiasmullie/minify":"^1.3",
-    "league/plates":"v4.0.0-alpha",
+    "filp/whoops": "^2.13",
+    "laminas/laminas-escaper": "^2.12",
+    "league/plates": "^3.5",
+    "matthiasmullie/minify": "^1.3",
     "minishlink/web-push": "^6.0",
-    "laminas/laminas-escaper": "^2.8",
-	  "monolog/monolog": "^2.3",
-    "symfony/dotenv": "^5.3",
-    "filp/whoops": "^2.13"
-  },
-  "require-dev": {
+    "phpmailer/phpmailer": "^6.8",
+    "rosell-dk/webp-convert": "^2.9",
+    "symfony/dotenv": "*"
   },
   "autoload": {
     "psr-4": {
       "HardJunior\\": "src"
     }
   },
-    "config": {
-        "sort-packages": true
-    }
+  "config": {
+    "sort-packages": true
+  }
 }

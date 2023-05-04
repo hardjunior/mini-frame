@@ -263,20 +263,22 @@ abstract class DataLayer
             /** Update */
             if (!empty($this->dados->$primary)) {
                 $codigo = $this->dados->$primary;
-                $this->update($this->safe(), "{$this->primary} = :codigo", "codigo={$codigo}");
+                if (!$this->update($this->safe(), "{$this->primary} = :codigo", "codigo={$codigo}")) {
+                    return false;
+                }
             }
 
             /** Create */
             if (empty($this->dados->$primary)) {
-                $codigo = $this->create($this->safe());
-            }
-
-            if (!$codigo) {
-                return false;
+                if (!$codigo = $this->create($this->safe())) {
+                    return false;
+                }
             }
 
             if ($result = $this->findById($codigo)) {
-                $this->dados = $this->findById($codigo)->dados();
+                if (!$this->dados = $this->findById($codigo)->dados()) {
+                    return false;
+                }
             }
             return true;
         } catch (Exception $exception) {
