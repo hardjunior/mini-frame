@@ -8,6 +8,7 @@
     "role": "Developer",
     "homepage": "http://hardjunior.ddns.net"
   }],
+  "minimum-stability": "stable",
   "require": {
     "php": ">=7.4",
     "ext-fileinfo": "*",
@@ -18,7 +19,6 @@
     "ext-openssl": "*",
     "filips123/monolog-phpmailer": "^1.0",
     "laminas/laminas-escaper": "^2.12",
-    "league/plates": "v4.0.0-alpha",
     "matthiasmullie/minify": "^1.3",
     "minishlink/web-push": "^6.0",
     "phpmailer/phpmailer": "^6.8",
