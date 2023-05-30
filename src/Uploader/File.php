@@ -26,6 +26,7 @@ class File extends Uploader
         "application/vnd.ms-excel",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/excel.sheet.macroEnabled.12",
+        "application/vnd.ms-excel.sheet.macroEnabled.12",
         "application/vnd.oasis.opendocument.spreadsheet",
         "application/vnd.oasis.opendocument.text",
     ];
@@ -74,5 +75,29 @@ class File extends Uploader
         }
 
         return [];
+    }
+
+    /**
+     * AddAllowTypes
+     * Método adiciona tipo de ficheiro permitido e retorna a classe
+     * @param  string $types
+     * @return File
+     */
+    public function addAllowTypes(string $types): File
+    {
+        self::$allowTypes[] = $types;
+        return $this;
+    }
+
+    /**
+     * AddExtensions
+     * Método adiciona extensão permitida e retorna e retorna a classe
+     * @param  string $extensao
+     * @return File
+     */
+    public function addExtensions(string $extensao): File
+    {
+        self::$extensions[] = str_replace(".", "", $extensao);
+        return $this;
     }
 }
