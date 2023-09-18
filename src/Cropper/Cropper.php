@@ -3,8 +3,6 @@
 namespace HardJunior\Cropper;
 
 use Exception;
-use WebPConvert\Convert\Exceptions\ConversionFailedException;
-use WebPConvert\WebPConvert;
 
 /**
  * Class HardJunior Cropper
@@ -103,13 +101,15 @@ class Cropper
 
         if ($this->webP && file_exists($imageWebP) && is_file($imageWebP)) {
             return $imageWebP;
-        }
+        } elseif ($this->webP && !file_exists($imageWebP)) {
+            return $this->toWebP($imageExt);
+        } else {
+            if (file_exists($imageExt) && is_file($imageExt)) {
+                return $imageExt;
+            }
 
-        if (file_exists($imageExt) && is_file($imageExt)) {
-            return $imageExt;
+            return $this->imageCache($width, $height);
         }
-
-        return $this->imageCache($width, $height);
     }
 
     /**
@@ -276,14 +276,15 @@ class Cropper
     {
         try {
             $webPConverted = pathinfo($image)["dirname"] . "/" . pathinfo($image)["filename"] . ".webp";
-            WebPConvert::convert($image, $webPConverted, ["default-quality" => $this->quality]);
+            $sourceImage = imagecreatefromjpeg($image);  // Or use imagecreatefrompng() based on image type
+            imagewebp($sourceImage, $webPConverted, $this->quality);
 
             if ($unlinkImage) {
                 unlink($image);
             }
 
             return $webPConverted;
-        } catch (ConversionFailedException $exception) {
+        } catch (Exception $exception) {
             return $image;
         }
     }

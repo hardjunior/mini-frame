@@ -13,11 +13,9 @@
     "php": ">=7.4",
     "ext-fileinfo": "*",
     "ext-gd": "*",
-    "ext-imagick": "*",
     "ext-json": "*",
     "ext-mbstring": "*",
-    "ext-openssl": "*",
-    "rosell-dk/webp-convert": "^2.9"
+    "ext-openssl": "*"
   },
   "autoload": {
     "psr-4": {
