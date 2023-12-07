@@ -22,12 +22,10 @@ class Connect
      */
     public static function getInstance($dbname = ''): ?PDO
     {
-        $dbname = (!empty($dbname)) ? $dbname : CONFIG_DB["dbname"];
-
-        if ((!empty($dbname)) || (empty(self::$instance))) {
+        if (empty(self::$instance)) {
             try {
                 self::$instance = new PDO(
-                    CONFIG_DB["driver"] . ":host=" . CONFIG_DB["host"] . ";dbname=" . $dbname . ";port=" . CONFIG_DB["port"],
+                    CONFIG_DB["driver"] . ":host=" . CONFIG_DB["host"] . ";dbname=" . CONFIG_DB["dbname"] . ";port=" . CONFIG_DB["port"],
                     CONFIG_DB["username"],
                     CONFIG_DB["passwd"],
                     CONFIG_DB["options"]
