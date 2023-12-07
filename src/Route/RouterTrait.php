@@ -131,7 +131,7 @@ trait RouterTrait
             $route = $this->process($route, $arguments, $params);
         }
 
-        return "{$this->projectUrl}{$route}";
+        return str_replace("\\", "/", "{$this->projectUrl}{$route}");
     }
 
     /**
