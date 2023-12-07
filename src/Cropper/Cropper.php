@@ -108,7 +108,11 @@ class Cropper
                 return $imageExt;
             }
 
-            return $this->imageCache($width, $height);
+            try {
+                return $this->imageCache($width, $height);
+            } catch (Exception $exception) {
+                return $exception->getMessage();
+            }
         }
     }
 
@@ -223,8 +227,12 @@ class Cropper
      */
     private function fromJpg(int $width, int $height, int $src_x, int $src_y, int $src_w, int $src_h): string
     {
-        $thumb = imagecreatetruecolor($width, $height);
-        $source = imagecreatefromjpeg($this->imagePath);
+        try {
+            $thumb = imagecreatetruecolor($width, $height);
+            $source = imagecreatefromjpeg($this->imagePath);
+        } catch (Exception $exception) {
+            return "Could not create image resource";
+        }
 
         imagecopyresampled($thumb, $source, 0, 0, $src_x, $src_y, $width, $height, $src_w, $src_h);
         imagejpeg($thumb, "{$this->cachePath}/{$this->imageName}.jpg", $this->quality);
@@ -250,8 +258,12 @@ class Cropper
      */
     private function fromPng(int $width, int $height, int $src_x, int $src_y, int $src_w, int $src_h): string
     {
-        $thumb = imagecreatetruecolor($width, $height);
-        $source = imagecreatefrompng($this->imagePath);
+        try {
+            $thumb = imagecreatetruecolor($width, $height);
+            $source = imagecreatefrompng($this->imagePath);
+        } catch (Exception $exception) {
+            return "Could not create image resource";
+        }
 
         imagealphablending($thumb, false);
         imagesavealpha($thumb, true);
