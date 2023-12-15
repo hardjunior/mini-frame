@@ -58,8 +58,11 @@ class File extends Uploader
      */
     public function upload(array $file, string $name): array
     {
-        $ext = (!empty(pathinfo($file['name']))) ? pathinfo($file['name'])['extension'] : ((strrpos($file['name'], ".")) ? substr($file['name'], strrpos($file['name'], ".") + 1, strlen($file['name'])) : '');
-
+        if ($infoFile = pathinfo($file['name'])) {
+            $ext = $infoFile['extension'];
+        } elseif (strrpos($file['name'], ".")) {
+            $ext = substr($file['name'], strrpos($file['name'], ".") + 1, strlen($file['name']));
+        }
         $this->ext = mb_strtolower($ext, "UTF-8");
 
         if (!in_array($file['type'], static::$allowTypes) || !in_array($this->ext, static::$extensions)) {
