@@ -229,10 +229,19 @@ abstract class DataLayer
             }
 
             if ($all) {
-                return $stmt->fetchAll(PDO::FETCH_CLASS, static::class);
+                $return = [];
+                if ($temp = $stmt->fetchAll(PDO::FETCH_CLASS, static::class)) {
+                    foreach ($temp as $row) {
+                        $row->entity = $this->entity;
+                        $return[] = $row;
+                    }
+                    return $return;
+                }
             }
 
-            return $stmt->fetchObject(static::class);
+            $return = $stmt->fetchObject(static::class);
+            $return->entity = $this->entity;
+            return $return;
         } catch (PDOException $exception) {
             $this->fail = $exception;
             return null;
