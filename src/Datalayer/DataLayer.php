@@ -31,7 +31,7 @@ abstract class DataLayer
     /** @var string */
     protected $statement;
 
-    /** @var string */
+    /** @var array|null */
     protected $params;
 
     /** @var string */
@@ -221,7 +221,13 @@ abstract class DataLayer
     public function fetch(bool $all = false)
     {
         try {
-            $stmt = Connect::getInstance()->prepare($this->statement . $this->group . $this->order . $this->limit . $this->offset);
+            $connection = Connect::getInstance();
+            if (!$connection) {
+                $this->fail = "Falhou para estabilizar conexão com a Base de Dados.";
+                return null;
+            }
+
+            $stmt = $connection->prepare($this->statement . $this->group . $this->order . $this->limit . $this->offset);
             $stmt->execute($this->params);
 
             if (!$stmt->rowCount()) {

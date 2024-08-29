@@ -28,6 +28,10 @@ trait CrudTrait
             $columns = implode(", ", array_keys($metaDados));
             $values = ":" . implode(", :", array_keys($metaDados));
             $dbh = Connect::getinstance();
+            if (!$dbh) {
+                $this->fail = "Falhou para estabilizar conexão com a Base de Dados.";
+                return null;
+            }
 
             $stmt = $dbh->prepare("INSERT INTO {$this->entity} ({$columns}) VALUES ({$values})");
 
