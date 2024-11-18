@@ -3,26 +3,42 @@
 namespace HardJunior\Datalayer;
 
 use PDO;
+use error;
 use PDOException;
 
 /**
  * Class Connect
- * @author Ivamar Júnior <https://github.com/hardjunior>
+ *
+ * @category Database
+ * @package  HardJunior\datalayer\Connect
+ * @author   Ivamar Júnior <hardjunior1@gmail.com>
+ * @license  MIT License
+ * @link     https://github.com/HardJunior/datalayer
  */
 class Connect
 {
-    /** @var PDO */
-    private static $instance;
-
-    /** @var PDOException */
-    private static $error;
+    /**
+     * Instance
+     *
+     * @var PDO
+     */
+    protected static $instance;
 
     /**
+     * Error
+     *
+     * @var PDOException
+     */
+    protected static $error;
+
+    /**
+     * GetInstance
+     *
      * @return PDO
      */
-    public static function getInstance($dbname = ''): ?PDO
+    public static function getInstance(): ?PDO
     {
-        if (empty(self::$instance)) {
+        if (!(self::$instance instanceof PDO)) {
             try {
                 self::$instance = new PDO(
                     CONFIG_DB["driver"] . ":host=" . CONFIG_DB["host"] . ";dbname=" . CONFIG_DB["dbname"] . ";port=" . CONFIG_DB["port"],
@@ -37,8 +53,9 @@ class Connect
         return self::$instance;
     }
 
-
     /**
+     * GetError
+     *
      * @return PDOException|null
      */
     public static function getError(): ?PDOException
@@ -48,15 +65,21 @@ class Connect
 
     /**
      * Connect constructor.
+     *
+     * @return void
      */
     private function __construct()
     {
+        return;
     }
 
     /**
      * Connect clone.
+     *
+     * @return void
      */
     private function __clone()
     {
+        return;
     }
 }

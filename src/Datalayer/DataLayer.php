@@ -9,55 +9,117 @@ use stdClass;
 
 /**
  * Class DataLayer
- * @author Ivamar Júnior <https://github.com/hardjunior>
- * @package HardJunior\datalayer\DataLayer
+ *
+ * @category DataLayer
+ * @package  HardJunior\MiniFrame
+ * @author   Ivamar Júnior <hardjunior1@gmail.com>
+ * @license  https://opensource.org/licenses/MIT MIT License
+ * @link     https://github.com/hardjunior
  */
 abstract class DataLayer
 {
     use CrudTrait;
 
-    /** @var string $entity database table */
-    private $entity;
+    /**
+     * Entity
+     *
+     * @var string
+     */
+    protected $entity;
 
-    /** @var string $primary table primary key field */
-    private $primary;
+    /**
+     * Joins
+     *
+     * @var array
+     */
+    protected $joins = [];
 
-    /** @var array $required table required fields */
-    private $required;
+    /**
+     * Primary
+     *
+     * @var string //$primary table primary key field
+     */
+    protected $primary;
 
-    /** @var string $timestamps control created and updated at */
-    private $timestamps;
+    /**
+     * Required
+     *
+     * @var array $required table required fields
+     */
+    protected $required;
 
-    /** @var string */
+    /**
+     * Timestamps
+     *
+     * @var string $timestamps control created and updated at
+     */
+    protected $timestamps;
+
+    /**
+     * Statement
+     *
+     * @var string
+     */
     protected $statement;
 
-    /** @var array|null */
+    /**
+     * Params
+     *
+     * @var array|null
+     */
     protected $params;
 
-    /** @var string */
+    /**
+     * Group
+     *
+     * @var string
+     */
     protected $group;
 
-    /** @var string */
+    /**
+     * Order
+     *
+     * @var string
+     */
     protected $order;
 
-    /** @var int */
+    /**
+     * Limit
+     *
+     * @var int
+     */
     protected $limit;
 
-    /** @var int */
+    /**
+     * Offset
+     *
+     * @var int
+     */
     protected $offset;
 
-    /** @var \PDOException|null */
+    /**
+     * Fail
+     *
+     * @var PDOException|Exception|null
+     */
     protected $fail;
 
-    /** @var object|null */
+    /**
+     * Dados
+     *
+     * @var object|null
+     */
     protected $dados;
 
     /**
-     * DataLayer constructor.
-     * @param string $entity
-     * @param array $required
-     * @param string $primary
-     * @param bool $timestamps
+     * _construct
+     *
+     * @param string $entity     table name
+     * @param array  $required   table required fields
+     * @param string $primary    table primary key field
+     * @param bool   $timestamps control created and updated at
+     *
+     * @return void
      */
     public function __construct(string $entity, array $required, string $primary = 'codigo', bool $timestamps = true)
     {
@@ -68,8 +130,12 @@ abstract class DataLayer
     }
 
     /**
-     * @param $name
-     * @param $value
+     * __set
+     *
+     * @param string $name  name
+     * @param mixed  $value value
+     *
+     * @return void
      */
     public function __set($name, $value)
     {
@@ -81,7 +147,10 @@ abstract class DataLayer
     }
 
     /**
-     * @param $name
+     * __isset
+     *
+     * @param string $name name
+     *
      * @return bool
      */
     public function __isset($name)
@@ -90,8 +159,11 @@ abstract class DataLayer
     }
 
     /**
-     * @param $name
-     * @return string|null
+     * __get
+     *
+     * @param string $name name
+     *
+     * @return null|string
      */
     public function __get($name)
     {
@@ -107,9 +179,13 @@ abstract class DataLayer
         return ($this->dados->$name ?? null);
     }
 
-    /*
-    * @return PDO mode
-    */
+    /**
+     * Columns
+     *
+     * @param int $mode PDO mode
+     *
+     * @return array
+     */
     public function columns($mode = PDO::FETCH_OBJ)
     {
         $stmt = Connect::getInstance()->prepare("DESCRIBE {$this->entity}");
@@ -119,7 +195,9 @@ abstract class DataLayer
 
 
     /**
-     * @return object|null
+     * Dados
+     *
+     * @return null|object
      */
     public function dados(): ?object
     {
@@ -127,7 +205,9 @@ abstract class DataLayer
     }
 
     /**
-     * @return PDOException|Exception|null
+     * Fail
+     *
+     * @return mixed
      */
     public function fail()
     {
@@ -135,29 +215,39 @@ abstract class DataLayer
     }
 
     /**
-     * @param string|null $terms
-     * @param string|null $params
-     * @param string $columns
+     * Find
+     *
+     * @param null|string $terms   //WHERE
+     * @param null|string $params  //BINDPARAM
+     * @param string      $columns //COLUNAS
+     *
      * @return DataLayer
      */
     public function find(?string $terms = null, ?string $params = null, string $columns = "*"): DataLayer
     {
+        $this->statement = "SELECT {$columns} FROM {$this->entity}";
+
+        if (!empty($this->joins)) {
+            $this->statement .= " " . implode(" ", $this->joins);
+        }
+
         if ($terms) {
-            $this->statement = "SELECT {$columns} FROM {$this->entity} WHERE {$terms}";
+            $this->statement .= " WHERE {$terms}";
             if (is_string($params)) {
                 parse_str($params, $this->params);
             }
-            return $this;
         }
 
-        $this->statement = "SELECT {$columns} FROM {$this->entity}";
         return $this;
     }
 
     /**
-     * @param int $codigo
-     * @param string $columns
-     * @return DataLayer|null
+     * FindById
+     *
+     * @param int    $codigo  //WHERE
+     * @param string $columns //COLUNAS
+     *
+     * @return null|DataLayer
      */
     public function findById(int $codigo, string $columns = "*"): ?DataLayer
     {
@@ -165,8 +255,11 @@ abstract class DataLayer
     }
 
     /**
-     * @param string $column
-     * @return DataLayer|null
+     * Group
+     *
+     * @param string $column //GROUP BY
+     *
+     * @return null|DataLayer
      */
     public function group(string $column): ?DataLayer
     {
@@ -175,8 +268,11 @@ abstract class DataLayer
     }
 
     /**
-     * @param string $columnOrder
-     * @return DataLayer|null
+     * Order
+     *
+     * @param string $columnOrder //ORDER BY
+     *
+     * @return null|DataLayer
      */
     public function order(string $columnOrder): ?DataLayer
     {
@@ -185,8 +281,26 @@ abstract class DataLayer
     }
 
     /**
-     * @param string $columnHaving
-     * @return DataLayer|null
+     * Join
+     *
+     * @param string $joinTable     Nome da tabela a ser unida
+     * @param string $joinCondition Condição de JOIN (ex: "tabela1.coluna = tabela2.coluna")
+     * @param string $joinType      Tipo de JOIN (ex: "INNER", "LEFT", "RIGHT")
+     *
+     * @return DataLayer
+     */
+    public function join(string $joinTable, string $joinCondition, string $joinType = "INNER"): DataLayer
+    {
+        $this->joins[] = "{$joinType} JOIN {$joinTable} ON {$joinCondition}";
+        return $this;
+    }
+
+    /**
+     * Having
+     *
+     * @param string $columnHaving //HAVING
+     *
+     * @return null|DataLayer
      */
     public function having(string $columnHaving): ?DataLayer
     {
@@ -195,8 +309,11 @@ abstract class DataLayer
     }
 
     /**
-     * @param int $limit
-     * @return DataLayer|null
+     * Limit
+     *
+     * @param int $limit //LIMIT
+     *
+     * @return null|DataLayer
      */
     public function limit(int $limit): ?DataLayer
     {
@@ -205,8 +322,11 @@ abstract class DataLayer
     }
 
     /**
-     * @param int $offset
-     * @return DataLayer|null
+     * Offset
+     *
+     * @param int $offset //OFFSET
+     *
+     * @return null|DataLayer
      */
     public function offset(int $offset): ?DataLayer
     {
@@ -215,46 +335,58 @@ abstract class DataLayer
     }
 
     /**
-     * @param bool $all
-     * @return array|mixed|null
+     * Fetch
+     *
+     * @param bool $all //fetchAll
+     *
+     * @return mixed
      */
     public function fetch(bool $all = false)
     {
-        try {
-            $connection = Connect::getInstance();
-            if (!$connection) {
-                $this->fail = "Falhou para estabilizar conexão com a Base de Dados.";
-                return null;
-            }
+        $maxRetries = 3; // Número máximo de tentativas
+        $attempt = 0;
 
-            $stmt = $connection->prepare($this->statement . $this->group . $this->order . $this->limit . $this->offset);
-            $stmt->execute($this->params);
+        while ($attempt < $maxRetries) {
+            try {
+                $connection = Connect::getInstance();
+                if (!$connection) {
+                    $this->fail = "Failed to establish database connection.";
+                    return null;
+                }
 
-            if (!$stmt->rowCount()) {
-                return null;
-            }
+                // Construção da query, garantindo que partes indefinidas não sejam concatenadas
+                $query = $this->statement;
+                $query .= $this->group ? $this->group : '';
+                $query .= $this->order ? $this->order : '';
+                $query .= $this->limit ? $this->limit : '';
+                $query .= $this->offset ? $this->offset : '';
 
-            if ($all) {
-                $return = [];
-                if ($temp = $stmt->fetchAll(PDO::FETCH_CLASS, static::class)) {
-                    foreach ($temp as $row) {
-                        $row->entity = $this->entity;
-                        $return[] = $row;
-                    }
-                    return $return;
+                $stmt = $connection->prepare($query);
+                $stmt->execute($this->params);
+
+                if (!$stmt->rowCount()) {
+                    return null;
+                }
+
+                if ($all) {
+                    return $stmt->fetchAll(PDO::FETCH_CLASS, static::class);
+                }
+
+                return $stmt->fetchObject(static::class);
+            } catch (PDOException $exception) {
+                $this->fail = $exception;
+                $attempt++;
+                if ($attempt >= $maxRetries) {
+                    return null;
                 }
             }
-
-            $return = $stmt->fetchObject(static::class);
-            $return->entity = $this->entity;
-            return $return;
-        } catch (PDOException $exception) {
-            $this->fail = $exception;
-            return null;
         }
+        return null;
     }
 
     /**
+     * Count
+     *
      * @return int
      */
     public function count(): int
@@ -265,38 +397,33 @@ abstract class DataLayer
     }
 
     /**
+     * Save
+     *
      * @return bool
      */
     public function save(): bool
     {
         $primary = $this->primary;
-        $codigo = null;
+        $codigo = $this->dados->$primary ?? null;
 
         try {
             if (!$this->required()) {
                 throw new Exception("Preencha os campos necessários");
             }
 
-            /** Update */
-            if (!empty($this->dados->$primary)) {
-                $codigo = $this->dados->$primary;
-                if (!$this->update($this->safe(), "{$this->primary} = :codigo", "codigo={$codigo}")) {
-                    return false;
-                }
+            // Update
+            if (!empty($codigo)) {
+                return $this->update($this->safe(), "{$this->primary} = :codigo", "codigo={$codigo}");
             }
 
-            /** Create */
-            if (empty($this->dados->$primary)) {
-                if (!$codigo = $this->create($this->safe())) {
-                    return false;
-                }
+            // Create
+            $codigo = $this->create($this->safe());
+            if (!$codigo) {
+                return false;
             }
 
-            if ($result = $this->findById($codigo)) {
-                if (!$this->dados = $this->findById($codigo)->dados()) {
-                    return false;
-                }
-            }
+            // Carrega os dados recém-criados para o objeto atual
+            $this->dados = $this->findById($codigo)->dados();
             return true;
         } catch (Exception $exception) {
             $this->fail = $exception;
@@ -305,6 +432,8 @@ abstract class DataLayer
     }
 
     /**
+     * Destroy
+     *
      * @return bool
      */
     public function destroy(): bool
@@ -320,6 +449,8 @@ abstract class DataLayer
     }
 
     /**
+     * Required
+     *
      * @return bool
      */
     protected function required(): bool
@@ -336,18 +467,32 @@ abstract class DataLayer
     }
 
     /**
-     * @return array|null
+     * Safe
+     *
+     * @return null|array
      */
     protected function safe(): ?array
     {
         $safe = (array)$this->dados;
+
+        // Remove o campo primário (chave)
         unset($safe[$this->primary]);
+
+        // Garante que os campos obrigatórios estão sempre presentes
+        foreach ($this->required as $field) {
+            if (!array_key_exists($field, $safe)) {
+                $safe[$field] = null; // ou outra lógica de fallback
+            }
+        }
+
         return $safe;
     }
 
-
     /**
-     * @param string $string
+     * ToCamelCase
+     *
+     * @param string $string //valor a converter
+     *
      * @return string
      */
     protected function toCamelCase(string $string): string
@@ -358,7 +503,7 @@ abstract class DataLayer
     }
 
     /**
-     * frontward
+     * Frontward
      *
      * @return void
      */
@@ -370,7 +515,7 @@ abstract class DataLayer
     }
 
     /**
-     * backward
+     * Backward
      *
      * @return void
      */
@@ -380,5 +525,106 @@ abstract class DataLayer
 
         parse_str("co={$this->codigo}", $this->params);
         return ($this)->fetch();
+    }
+
+    /**
+     * Call Procedure
+     *
+     * @param string $procedureName Nome do procedimento
+     * @param array  $params        Parâmetros para o procedimento
+     *
+     * @return null|bool
+     */
+    public function callProcedure(string $procedureName, array $params): ?bool
+    {
+        try {
+            $connection = Connect::getInstance();
+            $paramString = implode(', ', array_fill(0, count($params), '?'));
+            $query = "CALL {$procedureName}({$paramString})";
+
+            $stmt = $connection->prepare($query);
+            return $stmt->execute(array_values($params));
+        } catch (PDOException $exception) {
+            $this->fail = $exception;
+            return false;
+        }
+    }
+
+    /**
+     * Query
+     *
+     * @param string $query    // Query SQL
+     * @param array  $params   // Parâmetros para query
+     * @param bool   $fetchAll // Retorna todos os registros
+     *
+     * @return mixed
+     */
+    public function query(string $query, array $params = [], bool $fetchAll = true)
+    {
+        $maxRetries = 3; // Número máximo de tentativas
+        $attempt = 0;
+        $result = null;
+
+        while ($attempt < $maxRetries) {
+            try {
+                $attempt++;
+                $stmt = Connect::getInstance()->prepare($query);
+                $stmt->execute($params);
+
+                // Retorna o resultado com base na opção fetchAll
+                return $fetchAll ? $stmt->fetchAll() : $stmt->fetch();
+            } catch (PDOException $e) {
+                // Se for erro de conexão, tenta reconectar
+                if ($this->isConnectionError($e->getCode())) {
+                    if ($attempt < $this->maxRetries) {
+                        sleep(2); // Aguarda antes de tentar novamente
+                    }
+                } else {
+                    // Se o erro não for de conexão, loga e tenta novamente se necessário
+                    error_log("Erro ao executar a consulta (tentativa {$attempt}): " . $e->getMessage());
+
+                    // Se não for erro de conexão, lança a exceção (pode ser um erro de SQL, por exemplo)
+                    if ($attempt >= $this->maxRetries) {
+                        throw new Exception("Erro ao executar a query após {$this->maxRetries} tentativas: " . $e->getMessage());
+                    }
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * IsConnectionError
+     * Método para verificar se o erro é relacionado à conexão
+     *
+     * @param int $errorCode // Código de erro
+     *
+     * @return void
+     */
+    protected function isConnectionError($errorCode)
+    {
+        // Array associativo de códigos de erro e suas descrições
+        $connectionErrors = [
+            '2002' => 'Erro ao tentar conectar ao servidor MySQL (host incorreto ou servidor fora do ar)',
+            '2006' => 'MySQL Server foi fechado durante a execução da consulta',
+            '2013' => 'Tempo limite de conexão alcançado (provavelmente o servidor não respondeu a tempo)',
+            '1045' => 'Acesso negado para o usuário (usuário ou senha inválidos)',
+            '1049' => 'Banco de dados desconhecido (banco de dados não encontrado)',
+            '1040' => 'Número máximo de conexões simultâneas atingido no servidor MySQL',
+            '1064' => 'Erro de sintaxe SQL (erro na consulta)',
+            '1054' => 'Coluna desconhecida na consulta SQL',
+            '1146' => 'Tabela não encontrada no banco de dados',
+            '1205' => 'Tempo limite de bloqueio de tabela atingido',
+        ];
+
+        // Verifica se o código de erro está presente no array de erros de conexão
+        if (array_key_exists($errorCode, $connectionErrors)) {
+            // Se o código de erro for encontrado, retorna a descrição
+            return $connectionErrors[$errorCode];
+        }
+
+        // Caso não seja um erro de conexão listado, retorna false ou mensagem padrão
+        return false;
     }
 }

@@ -8,14 +8,21 @@ use PDOException;
 
 /**
  * Trait CrudTrait
- * @author Ivamar Júnior <https://github.com/hardjunior>
+ *
+ * @category DataLayer
+ * @package  HardJunior\datalayer\CrudTrait
+ * @author   Ivamar Júnior <hardjunior1@gmail.com>
+ * @license  MIT License
+ * @link     https://github.com/HardJunior/datalayer
  */
 trait CrudTrait
 {
     /**
-     * @param array $metaDados
+     * Create
+     *
+     * @param array $metaDados Dados a serem inseridos
+     *
      * @return int|null
-     * @throws Exception
      */
     protected function create(array $metaDados): ?int
     {
@@ -28,10 +35,6 @@ trait CrudTrait
             $columns = implode(", ", array_keys($metaDados));
             $values = ":" . implode(", :", array_keys($metaDados));
             $dbh = Connect::getinstance();
-            if (!$dbh) {
-                $this->fail = "Falhou para estabilizar conexão com a Base de Dados.";
-                return null;
-            }
 
             $stmt = $dbh->prepare("INSERT INTO {$this->entity} ({$columns}) VALUES ({$values})");
 
@@ -51,11 +54,13 @@ trait CrudTrait
     }
 
     /**
-     * @param array $metaDados
-     * @param string $terms
-     * @param string $params
+     * Update
+     *
+     * @param array  $metaDados //Dados a serem atualizados
+     * @param string $terms     //Condição para atualização
+     * @param string $params    //Parametros para condição
+     *
      * @return int|null
-     * @throws Exception
      */
     protected function update(array $metaDados, string $terms, string $params): ?int
     {
@@ -81,8 +86,11 @@ trait CrudTrait
     }
 
     /**
-     * @param string $terms
-     * @param string|null $params
+     * Delete
+     *
+     * @param string $terms  //Condição para deletar
+     * @param string $params //Parametros para condição
+     *
      * @return bool
      */
     public function delete(string $terms, ?string $params): bool
@@ -104,10 +112,13 @@ trait CrudTrait
     }
 
     /**
-     * @param array $metaDados
+     * Filter
+     *
+     * @param array $metaDados //Dados a serem filtrados
+     *
      * @return array|null
      */
-    private function filter(array $metaDados): ?array
+    protected function filter(array $metaDados): ?array
     {
         $filter = [];
         foreach ($metaDados as $key => $value) {
