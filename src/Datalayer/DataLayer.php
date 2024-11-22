@@ -399,9 +399,9 @@ abstract class DataLayer
     /**
      * Save
      *
-     * @return bool
+     * @return bool|int|null
      */
-    public function save(): bool
+    public function save()
     {
         $primary = $this->primary;
         $codigo = $this->dados->$primary ?? null;
