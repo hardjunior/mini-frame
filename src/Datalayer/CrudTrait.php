@@ -34,24 +34,35 @@ trait CrudTrait
         try {
             $columns = implode(", ", array_keys($metaDados));
             $values = ":" . implode(", :", array_keys($metaDados));
-            $dbh = Connect::getinstance();
+            $dbh = Connect::getInstance();
 
             $stmt = $dbh->prepare("INSERT INTO {$this->entity} ({$columns}) VALUES ({$values})");
 
-            $dbh->beginTransaction();
+            $startTransaction = false;
+
+            if (!$dbh->inTransaction()) {
+                $dbh->beginTransaction();
+                $startTransaction = true;
+            }
 
             $stmt->execute($this->filter($metaDados));
-
             $lastInsertId = $dbh->lastInsertId();
 
-            $dbh->commit();
+            if ($startTransaction) {
+                $dbh->commit();
+            }
 
             return $lastInsertId;
         } catch (PDOException $exception) {
+            if (!empty($startTransaction) && $dbh->inTransaction()) {
+                $dbh->rollBack();
+            }
+
             $this->fail = $exception;
             return null;
         }
     }
+
 
     /**
      * Update
@@ -69,6 +80,8 @@ trait CrudTrait
         }
 
         try {
+            $dbh = Connect::getInstance();
+
             $dateSet = [];
             foreach ($metaDados as $bind => $value) {
                 $dateSet[] = "{$bind} = :{$bind}";
@@ -76,14 +89,32 @@ trait CrudTrait
             $dateSet = implode(", ", $dateSet);
             parse_str($params, $params);
 
-            $stmt = Connect::getInstance()->prepare("UPDATE {$this->entity} SET {$dateSet} WHERE {$terms}");
+            $stmt = $dbh->prepare("UPDATE {$this->entity} SET {$dateSet} WHERE {$terms}");
+
+            $startTransaction = false;
+
+            if (!$dbh->inTransaction()) {
+                $dbh->beginTransaction();
+                $startTransaction = true;
+            }
+
             $stmt->execute($this->filter(array_merge($metaDados, $params)));
+
+            if ($startTransaction) {
+                $dbh->commit();
+            }
+
             return ($stmt->rowCount() ?? 1);
         } catch (PDOException $exception) {
+            if (!empty($startTransaction) && $dbh->inTransaction()) {
+                $dbh->rollBack();
+            }
+
             $this->fail = $exception;
             return null;
         }
     }
+
 
     /**
      * Delete
@@ -96,20 +127,39 @@ trait CrudTrait
     public function delete(string $terms, ?string $params): bool
     {
         try {
-            $stmt = Connect::getInstance()->prepare("DELETE FROM {$this->entity} WHERE {$terms}");
+            $dbh = Connect::getInstance();
+
+            $stmt = $dbh->prepare("DELETE FROM {$this->entity} WHERE {$terms}");
+
+            $startTransaction = false;
+
+            if (!$dbh->inTransaction()) {
+                $dbh->beginTransaction();
+                $startTransaction = true;
+            }
+
             if ($params) {
                 parse_str($params, $params);
                 $stmt->execute($params);
-                return true;
+            } else {
+                $stmt->execute();
             }
 
-            $stmt->execute();
+            if ($startTransaction) {
+                $dbh->commit();
+            }
+
             return true;
         } catch (PDOException $exception) {
+            if (!empty($startTransaction) && $dbh->inTransaction()) {
+                $dbh->rollBack();
+            }
+
             $this->fail = $exception;
             return false;
         }
     }
+
 
     /**
      * Filter
@@ -122,7 +172,13 @@ trait CrudTrait
     {
         $filter = [];
         foreach ($metaDados as $key => $value) {
-            $filter[$key] = (is_null($value) ? null : filter_var($value, FILTER_DEFAULT));
+            if (is_null($value)) {
+                $filter[$key] = null;
+            } elseif (is_string($value)) {
+                $filter[$key] = trim(strip_tags($value)); // limpa tags HTML e espaços
+            } else {
+                $filter[$key] = $value;
+            }
         }
         return $filter;
     }
