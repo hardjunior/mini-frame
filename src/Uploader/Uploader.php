@@ -5,34 +5,63 @@ namespace HardJunior\Uploader;
 /**
  * Class HardJunior Uploader
  *
- * @author Ivamar Júnior <https://github.com/hardjunior>
+ * @author  Ivamar Júnior <https://github.com/hardjunior>
  * @package HardJunior\uploader
  */
 abstract class Uploader
 {
-    /** @var string */
+    /**
+     * Path
+     *
+     * @var string
+     */
     protected $path;
 
-    /** @var resource */
+    /**
+     * File
+     *
+     * @var resource
+     */
     protected $file;
 
-    /** @var string */
+    /**
+     * Name
+     *
+     * @var string
+     */
     protected $name;
 
-    /** @var string */
+    /**
+     * Ext
+     *
+     * @var string
+     */
     protected $ext;
 
-    /** @var array */
+    /**
+     * AllowTypes
+     *
+     * @var array
+     */
     protected static $allowTypes = [];
 
-    /** @var array */
+    /**
+     * Extensions
+     *
+     * @var array
+     */
     protected static $extensions = [];
 
     /**
-     * @param string $uploadDir
-     * @param string $fileTypeDir
-     * @param bool $monthYearPath
+     * __construct
+     *
+     * @param string $uploadDir     //Diretorio de upload
+     * @param string $fileTypeDir   //Tipo de ficheiro
+     * @param bool   $monthYearPath //Separador de ano e mes
+     *
      * @example $u = new Upload("storage/uploads", "images");
+     *
+     * @return void
      */
     public function __construct(string $uploadDir, string $fileTypeDir, bool $monthYearPath = true)
     {
@@ -46,6 +75,8 @@ abstract class Uploader
     }
 
     /**
+     * IsAllowed
+     *
      * @return array
      */
     public static function isAllowed(): array
@@ -54,6 +85,8 @@ abstract class Uploader
     }
 
     /**
+     * IsExtension
+     *
      * @return array
      */
     public static function isExtension(): array
@@ -62,7 +95,10 @@ abstract class Uploader
     }
 
     /**
-     * @param string $name
+     * Name
+     *
+     * @param string $name //Nome do ficheiro
+     *
      * @return string
      */
     protected function name(string $name): string
@@ -86,8 +122,12 @@ abstract class Uploader
     }
 
     /**
-     * @param string $dir
-     * @param int $mode
+     * Dir
+     *
+     * @param string $dir  //Diretorio
+     * @param int    $mode //Modo
+     *
+     * @return void
      */
     protected function dir(string $dir, int $mode = 0755): void
     {
@@ -97,7 +137,11 @@ abstract class Uploader
     }
 
     /**
-     * @param string $path
+     * Path
+     *
+     * @param string $path //Diretorio
+     *
+     * @return void
      */
     protected function path(string $path): void
     {
@@ -109,8 +153,11 @@ abstract class Uploader
     }
 
     /**
-     * @param $inputName
-     * @param $files
+     * Multiple
+     *
+     * @param string $inputName //Nome do input
+     * @param array  $files     //Ficheiros
+     *
      * @return array
      */
     public function multiple($inputName, $files): array
