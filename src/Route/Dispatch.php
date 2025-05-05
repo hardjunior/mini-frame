@@ -143,10 +143,16 @@ abstract class Dispatch
     private function execute()
     {
         if ($this->route) {
+
             if (!is_null($this->route['middleware'])) {
-                foreach ($this->route['middleware'] as $key => $task) {
+                foreach ($this->route['middleware'] as $task) {
                     if (is_callable($task)) {
                         call_user_func($task);
+                    } elseif (is_string($task) && strpos($task, ':') !== false) {
+                        list($class, $method) = explode(':', $task);
+                        if (class_exists($class) && method_exists($class, $method)) {
+                            call_user_func([new $class(), $method]);
+                        }
                     }
                 }
             }
