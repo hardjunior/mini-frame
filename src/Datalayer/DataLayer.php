@@ -372,7 +372,11 @@ abstract class DataLayer
                     return $stmt->fetchAll(PDO::FETCH_CLASS, static::class);
                 }
 
-                return $stmt->fetchObject(static::class);
+                $object = $stmt->fetchObject(static::class);
+                if ($object) {
+                    $object->entity = $this->entity;
+                    return $object;
+                }
             } catch (PDOException $exception) {
                 $this->fail = $exception;
                 $attempt++;
