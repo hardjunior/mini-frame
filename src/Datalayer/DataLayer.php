@@ -56,6 +56,13 @@ abstract class DataLayer
     protected $timestamps;
 
     /**
+     * Colunas que podem conter HTML e não devem ser filtradas
+     *
+     * @var array
+     */
+    protected array $safeHtmlColumns = [];
+
+    /**
      * Statement
      *
      * @var string
@@ -121,12 +128,19 @@ abstract class DataLayer
      *
      * @return void
      */
-    public function __construct(string $entity, array $required, string $primary = 'codigo', bool $timestamps = true)
-    {
+    public function __construct(
+        string $entity,
+        array $required,
+        string $primary = 'codigo',
+        bool $timestamps = true,
+        array $safeHtmlColumns = []
+    ) {
         $this->entity = $entity;
         $this->primary = $primary;
         $this->required = $required;
         $this->timestamps = $timestamps;
+        // Colunas que podem conter HTML
+        $this->safeHtmlColumns = $safeHtmlColumns;
     }
 
     /**
@@ -574,7 +588,6 @@ abstract class DataLayer
                 $attempt++;
                 $stmt = Connect::getInstance()->prepare($query);
                 $stmt->execute($params);
-
                 // Retorna o resultado com base na opção fetchAll
                 return $fetchAll ? $stmt->fetchAll() : $stmt->fetch();
             } catch (PDOException $e) {

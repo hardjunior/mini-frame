@@ -87,25 +87,31 @@ trait CrudTrait
                 $dateSet[] = "{$bind} = :{$bind}";
             }
             $dateSet = implode(", ", $dateSet);
-            parse_str($params, $params);
+
+            parse_str($params, $parsedParams);
+
+            $mergedParams = array_merge($metaDados, $parsedParams);
+
+            foreach ($mergedParams as $key => $val) {
+                $mergedParams[$key] = $this->prepareValue($val);
+            }
 
             $stmt = $dbh->prepare("UPDATE {$this->entity} SET {$dateSet} WHERE {$terms}");
 
             $startTransaction = false;
-
             if (!$dbh->inTransaction()) {
                 $dbh->beginTransaction();
                 $startTransaction = true;
             }
 
-            $stmt->execute($this->filter(array_merge($metaDados, $params)));
+            $stmt->execute($this->filter($mergedParams));
 
             if ($startTransaction) {
                 $dbh->commit();
             }
 
             return ($stmt->rowCount() ?? 1);
-        } catch (PDOException $exception) {
+        } catch (PDOException | \InvalidArgumentException $exception) {
             if (!empty($startTransaction) && $dbh->inTransaction()) {
                 $dbh->rollBack();
             }
@@ -120,11 +126,11 @@ trait CrudTrait
      * Delete
      *
      * @param string $terms  //Condição para deletar
-     * @param string $params //Parametros para condição
+     * @param mixed $params //Parametros para condição
      *
      * @return bool
      */
-    public function delete(string $terms, ?string $params): bool
+    public function delete(string $terms, mixed $params): bool
     {
         try {
             $dbh = Connect::getInstance();
@@ -160,7 +166,6 @@ trait CrudTrait
         }
     }
 
-
     /**
      * Filter
      *
@@ -175,11 +180,31 @@ trait CrudTrait
             if (is_null($value)) {
                 $filter[$key] = null;
             } elseif (is_string($value)) {
-                $filter[$key] = trim(strip_tags($value)); // limpa tags HTML e espaços
+                if (isset($this->safeHtmlColumns) && in_array($key, $this->safeHtmlColumns, true)) {
+                    $filter[$key] = $value; // mantém HTML
+                } else {
+                    $filter[$key] = trim(strip_tags($value));
+                }
             } else {
-                $filter[$key] = $value;
+                $filter[$key] = $value; // números já passam
             }
         }
         return $filter;
+    }
+
+    /**
+     * PrepareValue
+     *
+     * @param  mixed $value //Valor a ser preparado para inserção/atualização
+     *
+     * @return mixed
+     */
+    protected function prepareValue($value)
+    {
+        if (is_array($value) || is_object($value)) {
+            // Serializa arrays/objetos como JSON
+            return json_encode($value, JSON_UNESCAPED_UNICODE);
+        }
+        return $value;
     }
 }
