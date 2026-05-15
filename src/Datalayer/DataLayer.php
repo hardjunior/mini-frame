@@ -112,6 +112,13 @@ abstract class DataLayer
     protected $fail;
 
     /**
+     * Max retries for ad-hoc queries.
+     *
+     * @var int
+     */
+    protected $maxRetries = 3;
+
+    /**
      * Dados
      *
      * @var object|null
@@ -573,11 +580,12 @@ abstract class DataLayer
      *
      * @param string $query    // Query SQL
      * @param array  $params   // Parâmetros para query
-     * @param bool   $fetchAll // Retorna todos os registros
+     * @param bool   $fetchAll  // Retorna todos os registros
+     * @param int    $fetchMode // Modo de retorno PDO
      *
      * @return mixed
      */
-    public function query(string $query, array $params = [], bool $fetchAll = true)
+    public function query(string $query, array $params = [], bool $fetchAll = true, int $fetchMode = PDO::FETCH_OBJ)
     {
         $maxRetries = 3; // Número máximo de tentativas
         $attempt = 0;
@@ -589,11 +597,11 @@ abstract class DataLayer
                 $stmt = Connect::getInstance()->prepare($query);
                 $stmt->execute($params);
                 // Retorna o resultado com base na opção fetchAll
-                return $fetchAll ? $stmt->fetchAll() : $stmt->fetch();
+                return $fetchAll ? $stmt->fetchAll($fetchMode) : $stmt->fetch($fetchMode);
             } catch (PDOException $e) {
                 // Se for erro de conexão, tenta reconectar
                 if ($this->isConnectionError($e->getCode())) {
-                    if ($attempt < $this->maxRetries) {
+                    if ($attempt < $maxRetries) {
                         sleep(2); // Aguarda antes de tentar novamente
                     }
                 } else {
@@ -601,7 +609,7 @@ abstract class DataLayer
                     error_log("Erro ao executar a consulta (tentativa {$attempt}): " . $e->getMessage());
 
                     // Se não for erro de conexão, lança a exceção (pode ser um erro de SQL, por exemplo)
-                    if ($attempt >= $this->maxRetries) {
+                    if ($attempt >= $maxRetries) {
                         throw new Exception("Erro ao executar a query após {$this->maxRetries} tentativas: " . $e->getMessage());
                     }
                 }
