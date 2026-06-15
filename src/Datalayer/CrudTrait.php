@@ -18,6 +18,55 @@ use PDOException;
 trait CrudTrait
 {
     /**
+     * ExecuteInTransaction
+     *
+     * Executa uma operação dentro de uma transação gerenciada automaticamente.
+     * Inicia transação apenas se não houver uma já ativa (suporta aninhamento).
+     *
+     * @param callable $operation Operação a ser executada (recebe PDO)
+     *
+     * @return mixed Retorno da operação, ou null em caso de exceção
+     */
+    protected function executeInTransaction(callable $operation): mixed
+    {
+        $dbh = Connect::getInstance();
+        $started = false;
+
+        if (!$dbh->inTransaction()) {
+            $dbh->beginTransaction();
+            $started = true;
+        }
+
+        try {
+            $result = $operation($dbh);
+            if ($started) {
+                $dbh->commit();
+            }
+            return $result;
+        } catch (\Throwable $exception) {
+            if ($started && $dbh->inTransaction()) {
+                $dbh->rollBack();
+            }
+            $this->fail = $exception;
+
+            // Log + notificação automática se Log estiver disponível
+            if (class_exists('\App\Suporte\Log')) {
+                try {
+                    (new \App\Suporte\Log())->grave(
+                        "DataLayer: " . $exception->getMessage(),
+                        \Monolog\Logger::ERROR,
+                        ['trace' => $exception->getTraceAsString()]
+                    );
+                } catch (\Throwable $logErr) {
+                    // silêncio — não podemos logar o erro do log
+                }
+            }
+
+            return null;
+        }
+    }
+
+    /**
      * Create
      *
      * @param array $metaDados Dados a serem inseridos
@@ -31,36 +80,15 @@ trait CrudTrait
             $metaDados["updated_at"] = $metaDados["created_at"];
         }
 
-        try {
+        return $this->executeInTransaction(function ($dbh) use ($metaDados) {
             $columns = implode(", ", array_keys($metaDados));
             $values = ":" . implode(", :", array_keys($metaDados));
-            $dbh = Connect::getInstance();
 
             $stmt = $dbh->prepare("INSERT INTO {$this->entity} ({$columns}) VALUES ({$values})");
-
-            $startTransaction = false;
-
-            if (!$dbh->inTransaction()) {
-                $dbh->beginTransaction();
-                $startTransaction = true;
-            }
-
             $stmt->execute($this->filter($metaDados));
-            $lastInsertId = $dbh->lastInsertId();
 
-            if ($startTransaction) {
-                $dbh->commit();
-            }
-
-            return $lastInsertId;
-        } catch (PDOException $exception) {
-            if (!empty($startTransaction) && $dbh->inTransaction()) {
-                $dbh->rollBack();
-            }
-
-            $this->fail = $exception;
-            return null;
-        }
+            return (int) $dbh->lastInsertId();
+        });
     }
 
 
@@ -79,9 +107,7 @@ trait CrudTrait
             $metaDados["updated_at"] = (new DateTime("now"))->format("Y-m-d H:i:s");
         }
 
-        try {
-            $dbh = Connect::getInstance();
-
+        return $this->executeInTransaction(function ($dbh) use ($metaDados, $terms, $params) {
             $dateSet = [];
             foreach ($metaDados as $bind => $value) {
                 $dateSet[] = "{$bind} = :{$bind}";
@@ -89,7 +115,6 @@ trait CrudTrait
             $dateSet = implode(", ", $dateSet);
 
             parse_str($params, $parsedParams);
-
             $mergedParams = array_merge($metaDados, $parsedParams);
 
             foreach ($mergedParams as $key => $val) {
@@ -97,28 +122,10 @@ trait CrudTrait
             }
 
             $stmt = $dbh->prepare("UPDATE {$this->entity} SET {$dateSet} WHERE {$terms}");
-
-            $startTransaction = false;
-            if (!$dbh->inTransaction()) {
-                $dbh->beginTransaction();
-                $startTransaction = true;
-            }
-
             $stmt->execute($this->filter($mergedParams));
 
-            if ($startTransaction) {
-                $dbh->commit();
-            }
-
             return ($stmt->rowCount() ?? 1);
-        } catch (PDOException | \InvalidArgumentException $exception) {
-            if (!empty($startTransaction) && $dbh->inTransaction()) {
-                $dbh->rollBack();
-            }
-
-            $this->fail = $exception;
-            return null;
-        }
+        });
     }
 
 
@@ -132,38 +139,20 @@ trait CrudTrait
      */
     public function delete(string $terms, mixed $params): bool
     {
-        try {
-            $dbh = Connect::getInstance();
-
+        $result = $this->executeInTransaction(function ($dbh) use ($terms, $params) {
             $stmt = $dbh->prepare("DELETE FROM {$this->entity} WHERE {$terms}");
 
-            $startTransaction = false;
-
-            if (!$dbh->inTransaction()) {
-                $dbh->beginTransaction();
-                $startTransaction = true;
-            }
-
             if ($params) {
-                parse_str($params, $params);
-                $stmt->execute($params);
+                parse_str($params, $parsedParams);
+                $stmt->execute($parsedParams);
             } else {
                 $stmt->execute();
             }
 
-            if ($startTransaction) {
-                $dbh->commit();
-            }
-
             return true;
-        } catch (PDOException $exception) {
-            if (!empty($startTransaction) && $dbh->inTransaction()) {
-                $dbh->rollBack();
-            }
+        });
 
-            $this->fail = $exception;
-            return false;
-        }
+        return $result ?? false;
     }
 
     /**

@@ -84,6 +84,13 @@ abstract class DataLayer
     protected $group;
 
     /**
+     * Having
+     *
+     * @var string
+     */
+    protected $having;
+
+    /**
      * Order
      *
      * @var string
@@ -210,7 +217,7 @@ abstract class DataLayer
     public function columns($mode = PDO::FETCH_OBJ)
     {
         $stmt = Connect::getInstance()->prepare("DESCRIBE {$this->entity}");
-        $stmt->execute($this->params);
+        $stmt->execute();
         return $stmt->fetchAll($mode);
     }
 
@@ -364,10 +371,9 @@ abstract class DataLayer
      */
     public function fetch(bool $all = false)
     {
-        $maxRetries = 3; // Número máximo de tentativas
         $attempt = 0;
 
-        while ($attempt < $maxRetries) {
+        while ($attempt < $this->maxRetries) {
             try {
                 $connection = Connect::getInstance();
                 if (!$connection) {
@@ -401,7 +407,7 @@ abstract class DataLayer
             } catch (PDOException $exception) {
                 $this->fail = $exception;
                 $attempt++;
-                if ($attempt >= $maxRetries) {
+                if ($attempt >= $this->maxRetries) {
                     return null;
                 }
             }
@@ -416,17 +422,18 @@ abstract class DataLayer
      */
     public function count(): int
     {
-        $stmt = Connect::getInstance()->prepare($this->statement);
+        $query = "SELECT COUNT(*) AS total FROM ({$this->statement}) AS count_query";
+        $stmt = Connect::getInstance()->prepare($query);
         $stmt->execute($this->params);
-        return $stmt->rowCount();
+        return (int) $stmt->fetchColumn();
     }
 
     /**
      * Save
      *
-     * @return bool|int|null
+     * @return bool
      */
-    public function save()
+    public function save(): bool
     {
         $primary = $this->primary;
         $codigo = $this->dados->$primary ?? null;
@@ -438,7 +445,8 @@ abstract class DataLayer
 
             // Update
             if (!empty($codigo)) {
-                return $this->update($this->safe(), "{$this->primary} = :codigo", "codigo={$codigo}");
+                $result = $this->update($this->safe(), "{$this->primary} = :codigo", "codigo={$codigo}");
+                return $result !== null;
             }
 
             // Create
@@ -534,7 +542,7 @@ abstract class DataLayer
      */
     public function frontward()
     {
-        $this->statement = $sql = "SELECT {$this->primary} FROM {$this->entity} WHERE {$this->primary} = (SELECT MIN({$this->primary}) FROM {$this->entity} WHERE {$this->primary} > :co)";
+        $this->statement = "SELECT {$this->primary} FROM {$this->entity} WHERE {$this->primary} = (SELECT MIN({$this->primary}) FROM {$this->entity} WHERE {$this->primary} > :co)";
         parse_str("co={$this->codigo}", $this->params);
         return ($this)->fetch();
     }
@@ -546,7 +554,7 @@ abstract class DataLayer
      */
     public function backward()
     {
-        $this->statement = $sql = "SELECT {$this->primary} FROM {$this->entity} WHERE {$this->primary} = (SELECT MAX({$this->primary}) FROM {$this->entity} WHERE {$this->primary} < :co)";
+        $this->statement = "SELECT {$this->primary} FROM {$this->entity} WHERE {$this->primary} = (SELECT MAX({$this->primary}) FROM {$this->entity} WHERE {$this->primary} < :co)";
 
         parse_str("co={$this->codigo}", $this->params);
         return ($this)->fetch();
@@ -587,11 +595,10 @@ abstract class DataLayer
      */
     public function query(string $query, array $params = [], bool $fetchAll = true, int $fetchMode = PDO::FETCH_OBJ)
     {
-        $maxRetries = 3; // Número máximo de tentativas
         $attempt = 0;
         $result = null;
 
-        while ($attempt < $maxRetries) {
+        while ($attempt < $this->maxRetries) {
             try {
                 $attempt++;
                 $stmt = Connect::getInstance()->prepare($query);
@@ -601,7 +608,7 @@ abstract class DataLayer
             } catch (PDOException $e) {
                 // Se for erro de conexão, tenta reconectar
                 if ($this->isConnectionError($e->getCode())) {
-                    if ($attempt < $maxRetries) {
+                    if ($attempt < $this->maxRetries) {
                         sleep(2); // Aguarda antes de tentar novamente
                     }
                 } else {
@@ -609,7 +616,7 @@ abstract class DataLayer
                     error_log("Erro ao executar a consulta (tentativa {$attempt}): " . $e->getMessage());
 
                     // Se não for erro de conexão, lança a exceção (pode ser um erro de SQL, por exemplo)
-                    if ($attempt >= $maxRetries) {
+                    if ($attempt >= $this->maxRetries) {
                         throw new Exception("Erro ao executar a query após {$this->maxRetries} tentativas: " . $e->getMessage());
                     }
                 }
@@ -625,7 +632,7 @@ abstract class DataLayer
      *
      * @param int $errorCode // Código de erro
      *
-     * @return void
+     * @return string|false
      */
     protected function isConnectionError($errorCode)
     {

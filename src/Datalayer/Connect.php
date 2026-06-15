@@ -3,7 +3,6 @@
 namespace HardJunior\Datalayer;
 
 use PDO;
-use error;
 use PDOException;
 
 /**
