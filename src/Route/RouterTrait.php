@@ -64,19 +64,18 @@ trait RouterTrait
         }
 
         preg_match_all("~\{\s* ([a-zA-Z_][a-zA-Z0-9_-]*) \}~x", $route, $keys, PREG_SET_ORDER);
-        $routeDiff = array_values(array_diff(explode("/", $this->patch), explode("/", $route)));
 
         $this->formSpoofing();
-        $offset = ($this->group ? 1 : 0);
+        $paramKeys = [];
         foreach ($keys as $key) {
-            $this->data[$key[1]] = ($routeDiff[$offset++] ?? null);
+            $paramKeys[] = $key[1];
         }
 
         $route = (!$this->group ? $route : "/{$this->group}{$route}");
         $data = $this->data;
         $namespace = $this->namespace;
         $middleware = $this->middleware;
-        $router = function () use ($method, $handler, $data, $route, $name, $namespace, $middleware) {
+        $router = function () use ($method, $handler, $data, $route, $name, $namespace, $middleware, $paramKeys) {
             return [
                 "route" => $route,
                 "name" => $name,
@@ -84,7 +83,8 @@ trait RouterTrait
                 "handler" => $this->handler($handler, $namespace),
                 "action" => $this->action($handler),
                 "data" => $data,
-                "middleware" => $middleware
+                "middleware" => $middleware,
+                "paramKeys" => $paramKeys
             ];
         };
 

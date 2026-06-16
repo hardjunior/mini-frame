@@ -128,9 +128,22 @@ abstract class Dispatch
         }
 
         $this->route = null;
+
         foreach ($this->routes[$this->httpMethod] as $key => $route) {
-            if (preg_match("~^" . $key . "$~", mb_strtolower($this->patch, "UTF-8"), $found)) {
+            if (preg_match("~^" . $key . "$~iu", $this->patch, $found)) {
                 $this->route = $route;
+
+                $paramValues = array_slice($found, 1);
+                $routeParams = [];
+
+                foreach ($route['paramKeys'] ?? [] as $i => $name) {
+                    $routeParams[$name] = $paramValues[$i] ?? null;
+                }
+
+                $this->route['data'] = array_merge(
+                    $route['data'] ?? [],
+                    $routeParams
+                );
             }
         }
 
