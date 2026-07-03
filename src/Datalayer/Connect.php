@@ -39,11 +39,16 @@ class Connect
     {
         if (!(self::$instance instanceof PDO)) {
             try {
+                $options = CONFIG_DB["options"] ?? [];
+                // Garante timeout de conexão para não travar servidor
+                if (!isset($options[PDO::ATTR_TIMEOUT])) {
+                    $options[PDO::ATTR_TIMEOUT] = 5;
+                }
                 self::$instance = new PDO(
                     CONFIG_DB["driver"] . ":host=" . CONFIG_DB["host"] . ";dbname=" . CONFIG_DB["dbname"] . ";port=" . CONFIG_DB["port"],
                     CONFIG_DB["username"],
                     CONFIG_DB["passwd"],
-                    CONFIG_DB["options"]
+                    $options
                 );
             } catch (PDOException $exception) {
                 self::$error = $exception;

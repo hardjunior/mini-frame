@@ -4,7 +4,6 @@ namespace HardJunior\Datalayer;
 
 use DateTime;
 use Exception;
-use PDOException;
 
 /**
  * Trait CrudTrait
@@ -52,8 +51,9 @@ trait CrudTrait
             // Log + notificação automática se Log estiver disponível
             if (class_exists('\App\Suporte\Log')) {
                 try {
+                    $db = defined('DATABASE') ? constant('DATABASE') : '?';
                     (new \App\Suporte\Log())->grave(
-                        "DataLayer: " . $exception->getMessage(),
+                        "DataLayer: " . $exception->getMessage() . " [db: {$db} | tabela: {$this->entity}]",
                         \Monolog\Logger::ERROR,
                         ['trace' => $exception->getTraceAsString()]
                     );
