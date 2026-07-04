@@ -145,7 +145,13 @@ class PHPMailerHandler extends MailHandler
     public function buildMessage(string $content, array $records): PHPMailer
     {
         $mailer = clone $this->mailer;
-        $mailer->CharSet = $mailer->CharSet ?: PHPMailer::CHARSET_UTF8;
+
+        // O PHPMailer nasce com iso-8859-1; como o Monolog produz UTF-8,
+        // força UTF-8 exceto se o utilizador definiu outro charset explícito.
+        if ($mailer->CharSet === '' || strcasecmp($mailer->CharSet, PHPMailer::CHARSET_ISO88591) === 0) {
+            $mailer->CharSet = PHPMailer::CHARSET_UTF8;
+            $mailer->Encoding = PHPMailer::ENCODING_QUOTED_PRINTABLE;
+        }
 
         if ($this->isHtmlBody($content)) {
             $mailer->isHTML(true);
