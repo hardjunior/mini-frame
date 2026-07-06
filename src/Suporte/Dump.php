@@ -17,6 +17,9 @@ declare(strict_types=1);
  *   - Suporte a múltiplos formatos de saída: html, ascii, json, md
  *   - dd() mostra sempre ficheiro e linha como última variável
  *   - Formatação própria sem classes auxiliares
+ *   - HTML colapsável (<details>/<summary>) para arrays e objetos
+ *   - dump_sql()/dd_sql(): interpola parâmetros PDO (:nomeados e ?)
+ *     na query para depuração, com destaque de keywords
  */
 
 namespace HardJunior\Suporte {
@@ -26,6 +29,11 @@ class Dump
     private static string $format = 'html';
 
     private const TIPOS = ['html', 'ascii', 'json', 'md'];
+
+    /**
+     * Profundidade até à qual os nós HTML nascem expandidos.
+     */
+    private const HTML_OPEN_DEPTH = 1;
 
     public static function configure(string $format): void
     {
@@ -42,36 +50,37 @@ class Dump
         return self::$format;
     }
 
+    /**
+     * Ficheiro/linha de quem chamou, ignorando os frames internos
+     * deste ficheiro (wrappers dd()/dump()/dump_sql()).
+     *
+     * @return array{0: string, 1: int}
+     */
+    private static function caller(): array
+    {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 6);
+        foreach ($trace as $frame) {
+            if (($frame['file'] ?? '') !== '' && $frame['file'] !== __FILE__) {
+                return [$frame['file'], $frame['line'] ?? 0];
+            }
+        }
+        return ['unknown', 0];
+    }
+
     public static function vars(mixed ...$vars): mixed
     {
         $format = self::detectFormat();
-
-        // Salta os frames internos deste ficheiro (wrappers dd()/dump())
-        // para apontar ao ficheiro/linha de quem realmente chamou.
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
-        $file = 'unknown';
-        $line = 0;
-        foreach ($trace as $frame) {
-            if (($frame['file'] ?? '') !== '' && $frame['file'] !== __FILE__) {
-                $file = $frame['file'];
-                $line = $frame['line'] ?? 0;
-                break;
-            }
-        }
+        [$file, $line] = self::caller();
 
         $count = count($vars);
-        $result = [];
 
         foreach ($vars as $k => $v) {
             $label = is_int($k) ? "#$k" : $k;
-            $output = self::render($v, $label, $format);
-            $result[] = $output;
-            echo $output;
+            echo self::render($v, $label, $format);
             echo "\n";
         }
 
-        $loc = self::renderLocation($file, $line, $format);
-        echo $loc;
+        echo self::renderLocation($file, $line, $format);
         echo "\n";
 
         return $count === 1 ? $vars[0] : $vars;
@@ -82,6 +91,164 @@ class Dump
         self::vars(...$vars);
         exit(1);
     }
+
+    /* ============================================================
+     *  DEBUG DE QUERIES SQL
+     * ============================================================ */
+
+    /**
+     * Mostra a query com os parâmetros PDO interpolados e devolve-a.
+     *
+     * Aceita parâmetros nomeados (:id), posicionais (?) ou uma
+     * query-string ("id=3&nome=x", à la parse_str).
+     *
+     * ATENÇÃO: apenas para depuração — a query devolvida não é
+     * segura contra injeção; nunca a executes diretamente.
+     *
+     * @param string       $query  SQL com placeholders.
+     * @param array|string $params Parâmetros do bind.
+     */
+    public static function sql(string $query, array|string $params = []): string
+    {
+        $interpolated = self::interpolate($query, $params);
+        $format = self::detectFormat();
+        [$file, $line] = self::caller();
+
+        echo self::renderSql($interpolated, $format);
+        echo "\n";
+        echo self::renderLocation($file, $line, $format);
+        echo "\n";
+
+        return $interpolated;
+    }
+
+    /**
+     * Substitui os placeholders pelos valores formatados em SQL.
+     */
+    public static function interpolate(string $query, array|string $params = []): string
+    {
+        if (is_string($params)) {
+            parse_str($params, $params);
+        }
+        if (!is_array($params) || $params === []) {
+            return $query;
+        }
+
+        $positional = [];
+        foreach ($params as $key => $value) {
+            if (is_int($key)) {
+                $positional[] = $value;
+                continue;
+            }
+            // \b garante que :id não substitui parte de :id_user,
+            // sem precisar de ordenar as chaves por comprimento.
+            $name = ltrim($key, ':');
+            $query = (string) preg_replace(
+                '/:' . preg_quote($name, '/') . '\b/',
+                self::sqlValue($value),
+                $query
+            );
+        }
+
+        // Posicionais (?) na ordem recebida (bind 1-based do PDO)
+        foreach ($positional as $value) {
+            $pos = strpos($query, '?');
+            if ($pos === false) {
+                break;
+            }
+            $query = substr_replace($query, self::sqlValue($value), $pos, 1);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Formata um valor PHP como literal SQL para depuração.
+     */
+    private static function sqlValue(mixed $value): string
+    {
+        switch (true) {
+            case $value === null:
+                return 'NULL';
+
+            case is_bool($value):
+                return $value ? '1' : '0';
+
+            case is_int($value):
+            case is_float($value):
+                return (string) $value;
+
+            // Arrays viram lista para cláusulas IN (...)
+            case is_array($value):
+                return implode(', ', array_map([self::class, 'sqlValue'], $value));
+
+            case $value instanceof \DateTimeInterface:
+                return "'" . $value->format('Y-m-d H:i:s') . "'";
+
+            default:
+                // Strings sempre entre aspas — mesmo numéricas, para não
+                // perder zeros à esquerda (telefones, códigos postais).
+                // Aspas simples duplicadas: escape padrão SQL, sem addslashes.
+                return "'" . str_replace("'", "''", (string) $value) . "'";
+        }
+    }
+
+    /**
+     * Insere quebras de linha antes das cláusulas principais.
+     */
+    private static function prettySql(string $sql): string
+    {
+        $clauses = 'FROM|LEFT JOIN|RIGHT JOIN|INNER JOIN|OUTER JOIN|JOIN|WHERE|GROUP BY|HAVING|'
+                 . 'ORDER BY|LIMIT|OFFSET|UNION ALL|UNION|VALUES|SET|ON DUPLICATE KEY UPDATE';
+        return trim((string) preg_replace('/\s+(' . $clauses . ')\b/i', "\n$1", $sql));
+    }
+
+    private static function renderSql(string $sql, string $format): string
+    {
+        $pretty = self::prettySql($sql);
+
+        switch ($format) {
+            case 'json':
+                return (string) json_encode(
+                    ['sql' => $sql],
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                );
+
+            case 'md':
+                return "```sql\n{$pretty}\n```";
+
+            case 'ascii':
+                return "── SQL ──\n{$pretty}";
+
+            default:
+                $html = htmlspecialchars($pretty, ENT_QUOTES, 'UTF-8');
+                // Strings a verde
+                $html = (string) preg_replace(
+                    "/'[^']*'/",
+                    "<span style='color:#a6e3a1'>$0</span>",
+                    $html
+                );
+                // Keywords a destaque
+                $keywords = 'SELECT|INSERT INTO|INSERT|UPDATE|DELETE|FROM|WHERE|AND|OR|NOT|IN|IS|NULL|'
+                          . 'LIKE|BETWEEN|LEFT JOIN|RIGHT JOIN|INNER JOIN|OUTER JOIN|JOIN|ON|AS|SET|'
+                          . 'VALUES|GROUP BY|ORDER BY|HAVING|LIMIT|OFFSET|UNION ALL|UNION|DISTINCT|'
+                          . 'COUNT|SUM|AVG|MIN|MAX|ASC|DESC|CASE|WHEN|THEN|ELSE|END|EXISTS';
+                $html = (string) preg_replace(
+                    '/\b(' . $keywords . ')\b(?![^<]*<\/span>)/i',
+                    "<span style='color:#cba6f7;font-weight:bold'>$1</span>",
+                    $html
+                );
+
+                return "<div style=\"background:#1e1e2e;color:#cdd6f4;padding:12px 16px;border-radius:8px;"
+                     . "font:13px/1.6 'JetBrains Mono',Consolas,monospace;overflow:auto;max-width:100%;"
+                     . "white-space:pre-wrap;word-break:break-word;margin:4px 0\">"
+                     . "<strong style='color:#89b4fa'>SQL</strong>\n{$html}</div>";
+        }
+    }
+
+    /* ============================================================
+     *  RENDERIZAÇÃO GERAL
+     * ============================================================ */
 
     private static function render(mixed $var, string $label, string $format): string
     {
@@ -99,23 +266,38 @@ class Dump
             'json' => json_encode(['file' => $file, 'line' => $line], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
             'md' => "**📍 {$file}:{$line}**",
             'ascii' => "\n━━━ 📍 {$file}:{$line} ━━━\n",
-            default => "<hr><small style='color:#888'>📍 <code>{$file}:{$line}</code></small>",
+            default => "<div style='margin:2px 0 8px'><small style='color:#888'>📍 <code>{$file}:{$line}</code></small></div>",
         };
     }
 
     private static function toHtml(mixed $var, string $label): string
     {
-        $html = "<pre style='background:#1e1e2e;color:#cdd6f4;padding:12px 16px;border-radius:8px;font:13px/1.5 " .
-                "'JetBrains Mono',monospace;overflow:auto;max-width:100%;white-space:pre-wrap;word-break:break-word;'>";
-        $html .= "<strong style='color:#89b4fa;'>{$label}</strong> ";
-        $html .= self::htmlValue($var);
-        $html .= "</pre>";
-        return $html;
+        return "<div style=\"background:#1e1e2e;color:#cdd6f4;padding:12px 16px;border-radius:8px;"
+             . "font:13px/1.6 'JetBrains Mono',Consolas,monospace;overflow:auto;max-width:100%;"
+             . "white-space:pre-wrap;word-break:break-word;margin:4px 0\">"
+             . "<strong style='color:#89b4fa'>{$label}</strong> "
+             . self::htmlValue($var)
+             . "</div>";
     }
 
-    private static function htmlValue(mixed $v, int $depth = 0, string $indent = ''): string
+    /**
+     * Nó colapsável: <details>/<summary> nativos do browser, sem JS.
+     * Nasce aberto até HTML_OPEN_DEPTH; mais fundo nasce fechado.
+     */
+    private static function htmlCollapsible(string $summary, array $children, int $depth): string
     {
-        $next = $indent . '  ';
+        $open = $depth < self::HTML_OPEN_DEPTH ? ' open' : '';
+        $out = "<details{$open} style='display:inline-block;vertical-align:top'>"
+             . "<summary style='cursor:pointer;user-select:none'>{$summary}</summary>"
+             . "<div style='padding-left:18px;border-left:1px solid #45475a;margin-left:4px'>";
+        foreach ($children as $child) {
+            $out .= "<div>{$child}</div>";
+        }
+        return $out . '</div></details>';
+    }
+
+    private static function htmlValue(mixed $v, int $depth = 0): string
+    {
         switch (true) {
             case is_null($v):
                 return "<span style='color:#6c7086'>null</span>";
@@ -125,8 +307,6 @@ class Dump
                          : "<span style='color:#f38ba8'>false</span>";
 
             case is_int($v):
-                return "<span style='color:#fab387'>{$v}</span>";
-
             case is_float($v):
                 return "<span style='color:#fab387'>{$v}</span>";
 
@@ -140,30 +320,33 @@ class Dump
                 if (empty($v)) {
                     return "<span style='color:#6c7086'>[]</span>";
                 }
-                $lines = ["<span style='color:#89b4fa'>array</span> <span style='color:#6c7086'>(" . count($v) . ")</span> ["];
+                $summary = "<span style='color:#89b4fa'>array</span>"
+                         . "<span style='color:#6c7086'>(" . count($v) . ")</span>";
+                $children = [];
                 foreach ($v as $kk => $vv) {
                     $kkStr = is_string($kk)
-                        ? "<span style='color:#f9e2af'>\"{$kk}\"</span>"
+                        ? "<span style='color:#f9e2af'>\"" . htmlspecialchars($kk, ENT_QUOTES, 'UTF-8') . "\"</span>"
                         : "<span style='color:#fab387'>{$kk}</span>";
-                    $lines[] = "{$next}{$kkStr} => " . self::htmlValue($vv, $depth + 1, $next);
+                    $children[] = "{$kkStr} => " . self::htmlValue($vv, $depth + 1);
                 }
-                $lines[] = "{$indent}]";
-                return implode("\n", $lines);
+                return self::htmlCollapsible($summary, $children, $depth);
 
             case is_object($v):
                 $class = get_class($v);
                 $props = (array) $v;
                 if (empty($props)) {
-                    return "<span style='color:#89b4fa'>{$class}</span> "
-                         . "<span style='color:#6c7086'>{}<span>";
+                    return "<span style='color:#89b4fa'>{$class}</span> <span style='color:#6c7086'>{}</span>";
                 }
-                $lines = ["<span style='color:#89b4fa'>{$class}</span> {"];
+                $summary = "<span style='color:#89b4fa'>{$class}</span>"
+                         . "<span style='color:#6c7086'>(" . count($props) . ")</span>";
+                $children = [];
                 foreach ($props as $kk => $vv) {
-                    $lines[] = "{$next}<span style='color:#f9e2af'>{$kk}</span> => "
-                             . self::htmlValue($vv, $depth + 1, $next);
+                    // Propriedades private/protected vêm com prefixos \0Classe\0 / \0*\0
+                    $clean = htmlspecialchars(str_replace("\0", '·', (string) $kk), ENT_QUOTES, 'UTF-8');
+                    $children[] = "<span style='color:#f9e2af'>{$clean}</span> => "
+                                . self::htmlValue($vv, $depth + 1);
                 }
-                $lines[] = "{$indent}}";
-                return implode("\n", $lines);
+                return self::htmlCollapsible($summary, $children, $depth);
 
             default:
                 return htmlspecialchars((string) $v);
@@ -302,6 +485,32 @@ namespace {
         function dump(mixed ...$vars): mixed
         {
             return \HardJunior\Suporte\Dump::vars(...$vars);
+        }
+    }
+
+    if (!function_exists('dump_sql')) {
+        /**
+         * Mostra a query com os parâmetros interpolados e devolve-a.
+         * Apenas para depuração — o resultado não é seguro para executar.
+         */
+        function dump_sql(string $query, array|string $params = []): string
+        {
+            return \HardJunior\Suporte\Dump::sql($query, $params);
+        }
+    }
+
+    if (!function_exists('dd_sql')) {
+        /**
+         * dump_sql() + termina a execução.
+         */
+        function dd_sql(string $query, array|string $params = []): never
+        {
+            if (!in_array(PHP_SAPI, ['cli', 'phpdbg', 'embed'], true) && !headers_sent()) {
+                header('HTTP/1.1 500 Internal Server Error');
+            }
+
+            \HardJunior\Suporte\Dump::sql($query, $params);
+            exit(1);
         }
     }
 }
