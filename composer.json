@@ -19,7 +19,7 @@
 		"ext-mbstring": "*",
 		"ext-openssl": "*",
 		"monolog/monolog": "^2.9 || ^3.0",
-		"phpmailer/phpmailer": "^6.8"
+		"phpmailer/phpmailer": "^7.1"
 	},
 	"autoload": {
 		"psr-4": {
