@@ -19,7 +19,7 @@ declare(strict_types=1);
  *   - Formatação própria sem classes auxiliares
  */
 
-namespace HardJunior\Suporte;
+namespace HardJunior\Suporte {
 
 class Dump
 {
@@ -45,9 +45,19 @@ class Dump
     public static function vars(mixed ...$vars): mixed
     {
         $format = self::detectFormat();
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1);
-        $file = $trace[0]['file'] ?? 'unknown';
-        $line = $trace[0]['line'] ?? 0;
+
+        // Salta os frames internos deste ficheiro (wrappers dd()/dump())
+        // para apontar ao ficheiro/linha de quem realmente chamou.
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+        $file = 'unknown';
+        $line = 0;
+        foreach ($trace as $frame) {
+            if (($frame['file'] ?? '') !== '' && $frame['file'] !== __FILE__) {
+                $file = $frame['file'];
+                $line = $frame['line'] ?? 0;
+                break;
+            }
+        }
 
         $count = count($vars);
         $result = [];
@@ -271,20 +281,27 @@ class Dump
     }
 }
 
-if (!function_exists('dd')) {
-    function dd(mixed ...$vars): never
-    {
-        if (!in_array(PHP_SAPI, ['cli', 'phpdbg', 'embed'], true) && !headers_sent()) {
-            header('HTTP/1.1 500 Internal Server Error');
+} // fim do namespace HardJunior\Suporte
+
+// As funções de debug têm de viver no namespace GLOBAL, senão registam-se
+// como HardJunior\Suporte\dd() e nunca são encontradas por quem chama dd().
+namespace {
+
+    if (!function_exists('dd')) {
+        function dd(mixed ...$vars): never
+        {
+            if (!in_array(PHP_SAPI, ['cli', 'phpdbg', 'embed'], true) && !headers_sent()) {
+                header('HTTP/1.1 500 Internal Server Error');
+            }
+
+            \HardJunior\Suporte\Dump::dump(...$vars);
         }
-
-        Dump::dump(...$vars);
     }
-}
 
-if (!function_exists('dump')) {
-    function dump(mixed ...$vars): mixed
-    {
-        return Dump::vars(...$vars);
+    if (!function_exists('dump')) {
+        function dump(mixed ...$vars): mixed
+        {
+            return \HardJunior\Suporte\Dump::vars(...$vars);
+        }
     }
 }
