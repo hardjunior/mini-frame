@@ -37,6 +37,17 @@ class Connect
      */
     public static function getInstance(): ?PDO
     {
+        if (self::$instance instanceof PDO) {
+            // Verifica se a conexão ainda está viva. Em processos longos
+            // (crons, leitura IMAP) o MySQL fecha a conexão por inatividade
+            // e o PDO estático fica morto → "Server has gone away".
+            try {
+                self::$instance->query("SELECT 1");
+            } catch (PDOException $e) {
+                self::$instance = null;
+            }
+        }
+
         if (!(self::$instance instanceof PDO)) {
             try {
                 $options = CONFIG_DB["options"] ?? [];
