@@ -216,7 +216,7 @@ abstract class DataLayer
      */
     public function columns($mode = PDO::FETCH_OBJ)
     {
-        $stmt = Connect::getInstance()->prepare("DESCRIBE {$this->entity}");
+        $stmt = $this->connection()->prepare("DESCRIBE {$this->entity}");
         $stmt->execute();
         return $stmt->fetchAll($mode);
     }
@@ -375,11 +375,7 @@ abstract class DataLayer
 
         while ($attempt < $this->maxRetries) {
             try {
-                $connection = Connect::getInstance();
-                if (!$connection) {
-                    $this->fail = "Failed to establish database connection.";
-                    return null;
-                }
+                $connection = $this->connection();
 
                 // Construção da query, garantindo que partes indefinidas não sejam concatenadas
                 $query = $this->statement;
@@ -423,7 +419,7 @@ abstract class DataLayer
     public function count(): int
     {
         $query = "SELECT COUNT(*) AS total FROM ({$this->statement}) AS count_query";
-        $stmt = Connect::getInstance()->prepare($query);
+        $stmt = $this->connection()->prepare($query);
         $stmt->execute($this->params);
         return (int) $stmt->fetchColumn();
     }
@@ -571,7 +567,7 @@ abstract class DataLayer
     public function callProcedure(string $procedureName, array $params): ?bool
     {
         try {
-            $connection = Connect::getInstance();
+            $connection = $this->connection();
             $paramString = implode(', ', array_fill(0, count($params), '?'));
             $query = "CALL {$procedureName}({$paramString})";
 
@@ -601,13 +597,14 @@ abstract class DataLayer
         while ($attempt < $this->maxRetries) {
             try {
                 $attempt++;
-                $stmt = Connect::getInstance()->prepare($query);
+                $stmt = $this->connection()->prepare($query);
                 $stmt->execute($params);
                 // Retorna o resultado com base na opção fetchAll
                 return $fetchAll ? $stmt->fetchAll($fetchMode) : $stmt->fetch($fetchMode);
             } catch (PDOException $e) {
                 // Se for erro de conexão, tenta reconectar
                 if ($this->isConnectionError($e->getCode())) {
+                    error_log("Erro de ligação na consulta (tentativa {$attempt}): " . $e->getMessage());
                     if ($attempt < $this->maxRetries) {
                         sleep(2); // Aguarda antes de tentar novamente
                     }
@@ -624,6 +621,28 @@ abstract class DataLayer
         }
 
         return $result;
+    }
+
+    /**
+     * Connection
+     * Devolve a ligação PDO ou lança PDOException (com a causa real do Connect)
+     * quando não há ligação, em vez de "member function on null".
+     *
+     * @return PDO
+     * @throws PDOException
+     */
+    protected function connection(): PDO
+    {
+        $connection = Connect::getInstance();
+        if ($connection === null) {
+            $causa = Connect::getError();
+            throw new PDOException(
+                'Sem ligação à base de dados' . ($causa ? ': ' . $causa->getMessage() : '.'),
+                2002
+            );
+        }
+
+        return $connection;
     }
 
     /**

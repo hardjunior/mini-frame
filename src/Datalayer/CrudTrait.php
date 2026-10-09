@@ -2,8 +2,11 @@
 
 namespace HardJunior\Datalayer;
 
+use App\Suporte\Log;
 use DateTime;
 use Exception;
+use Monolog\Logger;
+use PDOException;
 
 /**
  * Trait CrudTrait
@@ -28,8 +31,28 @@ trait CrudTrait
      */
     protected function executeInTransaction(callable $operation): mixed
     {
-        $dbh = Connect::getInstance();
         $started = false;
+
+        try {
+            $dbh = $this->connection();
+        } catch (\PDOException $e) {
+            // Sem ligação à BD: regista a causa real (PDOException do Connect) em vez de
+            // rebentar com "member function on null" e esconder o motivo.
+            $this->fail = $e;
+
+            if (class_exists('\App\Suporte\Log')) {
+                try {
+                    (new Log())->grave(
+                        "DataLayer: ligação à BD falhou: " . $this->fail->getMessage() . " [tabela: {$this->entity}]",
+                        Logger::ERROR
+                    );
+                } catch (\Throwable $logErr) {
+                    // silêncio — não podemos logar o erro do log
+                }
+            }
+
+            return null;
+        }
 
         if (!$dbh->inTransaction()) {
             $dbh->beginTransaction();
@@ -52,9 +75,9 @@ trait CrudTrait
             if (class_exists('\App\Suporte\Log')) {
                 try {
                     $db = defined('DATABASE') ? constant('DATABASE') : '?';
-                    (new \App\Suporte\Log())->grave(
+                    (new Log())->grave(
                         "DataLayer: " . $exception->getMessage() . " [db: {$db} | tabela: {$this->entity}]",
-                        \Monolog\Logger::ERROR,
+                        Logger::ERROR,
                         ['trace' => $exception->getTraceAsString()]
                     );
                 } catch (\Throwable $logErr) {
