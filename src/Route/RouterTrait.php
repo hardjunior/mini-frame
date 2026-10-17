@@ -63,15 +63,10 @@ trait RouterTrait
             $this->addRoute($method, "", $handler, $name);
         }
 
-        preg_match_all("~\{\s* ([a-zA-Z_][a-zA-Z0-9_-]*) \}~x", $route, $keys, PREG_SET_ORDER);
-
         $this->formSpoofing();
-        $paramKeys = [];
-        foreach ($keys as $key) {
-            $paramKeys[] = $key[1];
-        }
 
-        $route = (!$this->group ? $route : "/{$this->group}{$route}");
+        $path = $this->tenant . ($this->group ? "/{$this->group}" : "") . $route;
+        [$route, $regex, $paramKeys] = $this->compile($path);
         $data = $this->data;
         $namespace = $this->namespace;
         $middleware = $this->middleware;
@@ -84,12 +79,51 @@ trait RouterTrait
                 "action" => $this->action($handler),
                 "data" => $data,
                 "middleware" => $middleware,
-                "paramKeys" => $paramKeys
+                "paramKeys" => $paramKeys,
+                "static" => empty($paramKeys)
             ];
         };
 
-        $route = preg_replace('~{([^}]*)}~', "([^/]+)", $route);
-        $this->routes[$method][$route] = $router();
+        $this->routes[$method][$regex] = $router();
+    }
+
+    /**
+     * Compila o caminho completo (tenant + group + rota) num regex.
+     *
+     * Aceita {nome} e {nome:regex} (ex.: {id:[0-9]+}). Os segmentos fixos passam
+     * por preg_quote. Cada parâmetro vira um grupo nomeado (p0, p1…), por isso
+     * grupos de captura dentro do regex do utilizador não desalinham os valores.
+     *
+     * @param string $path
+     * @return array [template sem constraints, regex sem delimitadores, nomes dos parâmetros]
+     */
+    private function compile(string $path): array
+    {
+        $pattern = '~\{\s*([a-zA-Z_][a-zA-Z0-9_-]*)\s*(?::((?:[^{}]|\{[^{}]*\})+))?\}~';
+        preg_match_all($pattern, $path, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+
+        $template = "";
+        $regex = "";
+        $keys = [];
+        $offset = 0;
+
+        foreach ($matches as $match) {
+            $literal = substr($path, $offset, $match[0][1] - $offset);
+            $offset = $match[0][1] + strlen($match[0][0]);
+
+            $name = $match[1][0];
+            if (in_array($name, $keys, true)) {
+                throw new \LogicException("Route '{$path}': duplicate parameter {{$name}} (tenant, group and route must use distinct names)");
+            }
+
+            $constraint = trim($match[2][0] ?? "");
+            $regex .= preg_quote($literal, "~") . "(?P<p" . count($keys) . ">" . ($constraint !== "" ? $constraint : "[^/]+") . ")";
+            $template .= $literal . "{{$name}}";
+            $keys[] = $name;
+        }
+
+        $tail = substr($path, $offset);
+        return [$template . $tail, $regex . preg_quote($tail, "~"), $keys];
     }
 
     /**
@@ -119,6 +153,15 @@ trait RouterTrait
     private function treat(array $route_item, array $data = null): ?string
     {
         $route = $route_item["route"];
+
+        // Parâmetros em falta (ex.: {empresa}/{regiao}) herdam os da requisição atual
+        $current = $this->route["data"] ?? [];
+        foreach ($route_item["paramKeys"] ?? [] as $key) {
+            if (!isset($data[$key]) && isset($current[$key])) {
+                $data[$key] = $current[$key];
+            }
+        }
+
         if (!empty($data)) {
             $arguments = [];
             $params = [];

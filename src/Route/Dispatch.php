@@ -27,6 +27,12 @@ abstract class Dispatch
     /** @var null|string */
     protected $group;
 
+    /** @var string Prefixo (com parâmetros) comum a um conjunto de rotas, ex.: /{empresa}/{regiao} */
+    protected $tenant = "";
+
+    /** @var bool */
+    private $spoofed = false;
+
     /** @var null|array */
     protected $middleware;
 
@@ -87,12 +93,41 @@ abstract class Dispatch
      */
     public function group(?string $group): Dispatch
     {
-        $this->group = ($group ? str_replace("/", "", $group) : null);
+        $group = trim((string)$group, "/");
+        $this->group = ($group !== "" ? $group : null);
         return $this;
     }
 
     /**
-     * @param null|string $middleware
+     * Define o prefixo comum (pode ter parâmetros) das rotas seguintes.
+     * "/" = raiz (rotas públicas); "/{empresa}/{regiao}" = rotas por tenant.
+     * O caminho final é tenant + group + rota. Reinicia group e middleware,
+     * para que um conjunto de rotas nunca herde o do anterior.
+     *
+     * @param null|string $tenant
+     * @return Dispatch
+     */
+    public function tenant(?string $tenant): Dispatch
+    {
+        $tenant = trim((string)$tenant, "/");
+        $this->tenant = ($tenant !== "" ? "/{$tenant}" : "");
+        $this->group = null;
+        $this->middleware = null;
+        return $this;
+    }
+
+    /**
+     * Rota que casou com o pedido (após dispatch), com "data" já com os parâmetros.
+     *
+     * @return null|array
+     */
+    public function current(): ?array
+    {
+        return $this->route;
+    }
+
+    /**
+     * @param null|array $middleware
      * @return Dispatch
      */
     public function middleware(?array $middleware): Dispatch
@@ -129,21 +164,27 @@ abstract class Dispatch
 
         $this->route = null;
 
-        foreach ($this->routes[$this->httpMethod] as $key => $route) {
-            if (preg_match("~^" . $key . "$~iu", $this->patch, $found)) {
-                $this->route = $route;
-
-                $paramValues = array_slice($found, 1);
-                $routeParams = [];
-
-                foreach ($route['paramKeys'] ?? [] as $i => $name) {
-                    $routeParams[$name] = $paramValues[$i] ?? null;
+        // A primeira rota que casa vence; as estáticas são testadas antes das dinâmicas
+        foreach ([true, false] as $static) {
+            foreach ($this->routes[$this->httpMethod] as $key => $route) {
+                if (($route['static'] ?? empty($route['paramKeys'])) !== $static) {
+                    continue;
                 }
 
-                $this->route['data'] = array_merge(
-                    $route['data'] ?? [],
-                    $routeParams
-                );
+                if (preg_match("~^" . $key . "$~iu", $this->patch, $found)) {
+                    $this->route = $route;
+
+                    $routeParams = [];
+                    foreach ($route['paramKeys'] ?? [] as $i => $name) {
+                        $routeParams[$name] = $found["p{$i}"] ?? null;
+                    }
+
+                    $this->route['data'] = array_merge(
+                        $route['data'] ?? [],
+                        $routeParams
+                    );
+                    break 2;
+                }
             }
         }
 
@@ -158,15 +199,34 @@ abstract class Dispatch
         if ($this->route) {
 
             if (!is_null($this->route['middleware'])) {
-                foreach ($this->route['middleware'] as $task) {
-                    if (is_callable($task)) {
-                        call_user_func($task);
-                    } elseif (is_string($task) && strpos($task, ':') !== false) {
-                        list($class, $method) = explode(':', $task);
-                        if (class_exists($class) && method_exists($class, $method)) {
-                            call_user_func([new $class(), $method]);
+                $data = $this->route['data'] ?? [];
+
+                try {
+                    foreach ($this->route['middleware'] as $task) {
+                        if (is_string($task) && trim($task) === '') {
+                            continue;
+                        }
+
+                        if (is_callable($task)) {
+                            call_user_func($task, $data);
+                        } elseif (is_string($task) && strpos($task, ':') !== false) {
+                            list($class, $method) = explode(':', $task, 2);
+                            if (class_exists($class) && method_exists($class, $method)) {
+                                call_user_func([new $class(), $method], $data);
+                                continue;
+                            }
+
+                            $this->error = self::NOT_IMPLEMENTED;
+                            return false;
+                        } else {
+                            // Middleware inexistente: falha fechado em vez de ser ignorado
+                            $this->error = self::NOT_IMPLEMENTED;
+                            return false;
                         }
                     }
+                } catch (Abort $abort) {
+                    $this->error = $abort->getCode();
+                    return false;
                 }
             }
             if (is_callable($this->route['handler'])) {
@@ -201,6 +261,11 @@ abstract class Dispatch
      */
     protected function formSpoofing(): void
     {
+        if ($this->spoofed) {
+            return;
+        }
+        $this->spoofed = true;
+
         $post = filter_input_array(INPUT_POST, FILTER_DEFAULT);
 
         if (!empty($post['_method']) && in_array($post['_method'], ["PUT", "PATCH", "DELETE"])) {
