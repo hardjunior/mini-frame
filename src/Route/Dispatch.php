@@ -33,6 +33,15 @@ abstract class Dispatch
     /** @var bool */
     private $spoofed = false;
 
+    /** @var bool scope() chamado: só as rotas do contexto ativo (público ou tenant) são consideradas */
+    protected $scoped = false;
+
+    /** @var string Caminho do tenant ativo, ex.: /zas/centro ("" = público) */
+    protected $scopePath = "";
+
+    /** @var array Parâmetros do tenant ativo, ex.: ["empresa" => "zas", "regiao" => "centro"] */
+    protected $scopeData = [];
+
     /** @var null|array */
     protected $middleware;
 
@@ -117,6 +126,25 @@ abstract class Dispatch
     }
 
     /**
+     * Fixa o contexto do pedido, resolvido antes do dispatch (ex.: pela whitelist de tenants).
+     * - Só as rotas desse contexto são consideradas (tenant ou público);
+     * - redirect("/x") relativo fica dentro do tenant;
+     * - route() preenche {empresa}/{regiao} em falta e prefere os nomes do contexto.
+     *
+     * @param null|string $path Caminho do tenant, ex.: "/zas/centro"; null/"" = público
+     * @param array $data Parâmetros desse caminho, ex.: ["empresa" => "zas", "regiao" => "centro"]
+     * @return Dispatch
+     */
+    public function scope(?string $path, array $data = []): Dispatch
+    {
+        $path = trim((string)$path, "/");
+        $this->scoped = true;
+        $this->scopePath = ($path !== "" ? "/{$path}" : "");
+        $this->scopeData = ($path !== "" ? $data : []);
+        return $this;
+    }
+
+    /**
      * Rota que casou com o pedido (após dispatch), com "data" já com os parâmetros.
      *
      * @return null|array
@@ -171,11 +199,20 @@ abstract class Dispatch
                     continue;
                 }
 
+                if ($this->scoped && ($route['tenant'] ?? false) !== ($this->scopePath !== "")) {
+                    continue;
+                }
+
                 if (preg_match("~^" . $key . "$~iu", $this->patch, $found)) {
                     $this->route = $route;
 
                     $routeParams = [];
+                    $tenantParams = [];
                     foreach ($route['paramKeys'] ?? [] as $i => $name) {
+                        if ($i < ($route['tenantCount'] ?? 0)) {
+                            $tenantParams[$name] = $found["p{$i}"] ?? null;
+                            continue;
+                        }
                         $routeParams[$name] = $found["p{$i}"] ?? null;
                     }
 
@@ -183,6 +220,7 @@ abstract class Dispatch
                         $route['data'] ?? [],
                         $routeParams
                     );
+                    $this->route['tenant_data'] = $tenantParams;
                     break 2;
                 }
             }
@@ -200,6 +238,7 @@ abstract class Dispatch
 
             if (!is_null($this->route['middleware'])) {
                 $data = $this->route['data'] ?? [];
+                $tenantData = $this->route['tenant_data'] ?? [];
 
                 try {
                     foreach ($this->route['middleware'] as $task) {
@@ -208,11 +247,11 @@ abstract class Dispatch
                         }
 
                         if (is_callable($task)) {
-                            call_user_func($task, $data);
+                            call_user_func($task, $data, $tenantData);
                         } elseif (is_string($task) && strpos($task, ':') !== false) {
                             list($class, $method) = explode(':', $task, 2);
                             if (class_exists($class) && method_exists($class, $method)) {
-                                call_user_func([new $class(), $method], $data);
+                                call_user_func([new $class(), $method], $data, $tenantData);
                                 continue;
                             }
 

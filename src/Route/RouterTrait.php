@@ -20,14 +20,21 @@ trait RouterTrait
      */
     public function route(string $name, array $data = null): ?string
     {
-        foreach ($this->routes as $http_verb) {
+        $fallback = null;
+
+        foreach ($this->routes ?? [] as $http_verb) {
             foreach ($http_verb as $route_item) {
                 if (!empty($route_item["name"]) && $route_item["name"] == $name) {
+                    // Com scope() ativo, o mesmo nome em outro contexto (público vs tenant) só vale se não houver no atual
+                    if ($this->scoped && $route_item["tenant"] !== ($this->scopePath !== "")) {
+                        $fallback = $fallback ?? $route_item;
+                        continue;
+                    }
                     return $this->treat($route_item, $data);
                 }
             }
         }
-        return null;
+        return ($fallback ? $this->treat($fallback, $data) : null);
     }
 
     /**
@@ -47,7 +54,7 @@ trait RouterTrait
         }
 
         $route = (substr($route, 0, 1) == "/" ? $route : "/{$route}");
-        header("Location: {$this->projectUrl}{$route}");
+        header("Location: {$this->projectUrl}{$this->scopePath}{$route}");
         exit;
     }
 
@@ -65,12 +72,23 @@ trait RouterTrait
 
         $this->formSpoofing();
 
-        $path = $this->tenant . ($this->group ? "/{$this->group}" : "") . $route;
-        [$route, $regex, $paramKeys] = $this->compile($path);
+        // Os parâmetros do tenant ficam separados dos da rota: não se misturam com os dados do pedido
+        [$tenantTemplate, $tenantRegex, $tenantKeys] = $this->compile($this->tenant);
+        [$route, $regex, $paramKeys] = $this->compile(($this->group ? "/{$this->group}" : "") . $route, count($tenantKeys));
+
+        if ($duplicated = array_intersect($tenantKeys, $paramKeys)) {
+            throw new \LogicException("Route '{$this->tenant}{$route}': parameter {" . reset($duplicated) . "} repeats a tenant parameter");
+        }
+
+        $route = $tenantTemplate . $route;
+        $regex = $tenantRegex . $regex;
+        $paramKeys = array_merge($tenantKeys, $paramKeys);
+        $tenantCount = count($tenantKeys);
         $data = $this->data;
         $namespace = $this->namespace;
         $middleware = $this->middleware;
-        $router = function () use ($method, $handler, $data, $route, $name, $namespace, $middleware, $paramKeys) {
+        $tenant = ($this->tenant !== "");
+        $router = function () use ($method, $handler, $data, $route, $name, $namespace, $middleware, $paramKeys, $tenant, $tenantCount) {
             return [
                 "route" => $route,
                 "name" => $name,
@@ -80,7 +98,9 @@ trait RouterTrait
                 "data" => $data,
                 "middleware" => $middleware,
                 "paramKeys" => $paramKeys,
-                "static" => empty($paramKeys)
+                "static" => empty($paramKeys),
+                "tenant" => $tenant,
+                "tenantCount" => $tenantCount
             ];
         };
 
@@ -95,9 +115,10 @@ trait RouterTrait
      * grupos de captura dentro do regex do utilizador não desalinham os valores.
      *
      * @param string $path
+     * @param int $start Índice do primeiro grupo (continua a numeração do tenant)
      * @return array [template sem constraints, regex sem delimitadores, nomes dos parâmetros]
      */
-    private function compile(string $path): array
+    private function compile(string $path, int $start = 0): array
     {
         $pattern = '~\{\s*([a-zA-Z_][a-zA-Z0-9_-]*)\s*(?::((?:[^{}]|\{[^{}]*\})+))?\}~';
         preg_match_all($pattern, $path, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
@@ -117,7 +138,7 @@ trait RouterTrait
             }
 
             $constraint = trim($match[2][0] ?? "");
-            $regex .= preg_quote($literal, "~") . "(?P<p" . count($keys) . ">" . ($constraint !== "" ? $constraint : "[^/]+") . ")";
+            $regex .= preg_quote($literal, "~") . "(?P<p" . ($start + count($keys)) . ">" . ($constraint !== "" ? $constraint : "[^/]+") . ")";
             $template .= $literal . "{{$name}}";
             $keys[] = $name;
         }
@@ -154,9 +175,9 @@ trait RouterTrait
     {
         $route = $route_item["route"];
 
-        // Parâmetros em falta (ex.: {empresa}/{regiao}) herdam os da requisição atual
-        $current = $this->route["data"] ?? [];
-        foreach ($route_item["paramKeys"] ?? [] as $key) {
+        // Parâmetros do tenant em falta (ex.: {empresa}/{zona}) herdam os do tenant do pedido atual
+        $current = ($this->scopeData ?: ($this->route["tenant_data"] ?? []));
+        foreach (array_slice($route_item["paramKeys"] ?? [], 0, $route_item["tenantCount"] ?? 0) as $key) {
             if (!isset($data[$key]) && isset($current[$key])) {
                 $data[$key] = $current[$key];
             }
