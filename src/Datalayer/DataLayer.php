@@ -401,6 +401,9 @@ abstract class DataLayer
                     return $object;
                 }
             } catch (PDOException $exception) {
+                if (Connect::isGoneAway($exception)) {
+                    Connect::reset();
+                }
                 $this->fail = $exception;
                 $attempt++;
                 if ($attempt >= $this->maxRetries) {
@@ -602,6 +605,12 @@ abstract class DataLayer
                 // Retorna o resultado com base na opção fetchAll
                 return $fetchAll ? $stmt->fetchAll($fetchMode) : $stmt->fetch($fetchMode);
             } catch (PDOException $e) {
+                if (Connect::isGoneAway($e)) {
+                    // Conexão morta: descarta para reconectar na próxima tentativa
+                    Connect::reset();
+                    error_log("Ligação perdida na consulta (tentativa {$attempt}): " . $e->getMessage());
+                    continue;
+                }
                 // Se for erro de conexão, tenta reconectar
                 if ($this->isConnectionError($e->getCode())) {
                     error_log("Erro de ligação na consulta (tentativa {$attempt}): " . $e->getMessage());
