@@ -98,7 +98,7 @@ trait RouterTrait
                 "data" => $data,
                 "middleware" => $middleware,
                 "paramKeys" => $paramKeys,
-                "static" => empty($paramKeys),
+                "static" => count($paramKeys) === $tenantCount,
                 "tenant" => $tenant,
                 "tenantCount" => $tenantCount
             ];
