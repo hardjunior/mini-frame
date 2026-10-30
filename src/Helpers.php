@@ -6,7 +6,7 @@
  * @param  string null $param
  * @return string
  */
-function site(string $param = null): string
+function site(?string $param = null): string
 {
     if ($param && !empty(SITE[$param])) {
         return SITE[$param];
@@ -33,7 +33,7 @@ function asset(string $path, $time = true): string
     return $file;
 }
 
-function flash(string $type = null, string $message = null, string $icon = null): ?string
+function flash(?string $type = null, ?string $message = null, ?string $icon = null): ?string
 {
     // if ($type && $message && $icon){
     if ($type && $message) {

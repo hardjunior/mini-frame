@@ -1060,7 +1060,7 @@ class FirePHP
                         $severity = 'E_USER_NOTICE';
                         break;
 
-                    case E_STRICT:
+                    case 2048: // E_STRICT (constante deprecated no PHP 8.4)
                         $severity = 'E_STRICT';
                         break;
 
@@ -1657,7 +1657,7 @@ class FirePHP
                 }
 
                 if (!$this->is_utf8($key)) {
-                    $key = utf8_encode($key);
+                    $key = mb_convert_encoding($key, 'UTF-8', 'ISO-8859-1');
                 }
 
                 $return[$key] = $this->encodeObject($val, 1, $arrayDepth + 1, $maxDepth + 1, $options);
@@ -1690,7 +1690,7 @@ class FirePHP
             if ($this->is_utf8($object)) {
                 return $object;
             } else {
-                return utf8_encode($object);
+                return mb_convert_encoding($object, 'UTF-8', 'ISO-8859-1');
             }
         }
         return $return;

@@ -65,7 +65,7 @@ class MetaTags
      * @param string|null $image
      * @return object
      */
-    public function data(string $title = null, string $desc = null, string $url = null, string $image = null): ?object
+    public function data(?string $title = null, ?string $desc = null, ?string $url = null, ?string $image = null): ?object
     {
         (!$title ?: $this->title = $title);
         (!$desc ?: $this->description = $desc);
