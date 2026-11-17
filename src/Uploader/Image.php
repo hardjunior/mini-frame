@@ -67,14 +67,20 @@ class Image extends Uploader
     protected function imageCreate(array $image): bool
     {
         if ($image['type'] == "image/jpeg") {
-            $this->file = imagecreatefromjpeg($image['tmp_name']);
+            $this->file = @imagecreatefromjpeg($image['tmp_name']);
+            if (!$this->file instanceof \GdImage) {
+                return false;
+            }
             $this->ext = "jpg";
             $this->checkAngle($image);
             return true;
         }
 
         if ($image['type'] == "image/png") {
-            $this->file = imagecreatefrompng($image['tmp_name']);
+            $this->file = @imagecreatefrompng($image['tmp_name']);
+            if (!$this->file instanceof \GdImage) {
+                return false;
+            }
             $this->ext = "png";
             return true;
         }
